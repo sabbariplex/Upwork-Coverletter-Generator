@@ -563,7 +563,14 @@ Best regards,
       <div class="settings-grid">
         <div class="settings-card" style="grid-column: 1 / -1;">
           <h3 class="card-title">📝 Generate AI Proposal</h3>
-        
+          <div class="form-group">
+            <label class="form-label" for="ai-custom-prompt">AI Prompt (used when AI Proposal is selected)</label>
+            <textarea id="ai-custom-prompt" class="form-textarea" rows="10" placeholder="Write a custom instruction for AI proposals. This will guide the AI when generating cover letters in AI Proposal mode."></textarea>
+            <div class="form-help">Tip: set temperature to 0.3–0.5 for stricter adherence. Save to persist your prompt.</div>
+          </div>
+          <div class="form-group">
+            <button class="btn btn-primary" id="save-ai-prompt">💾 Save</button>
+          </div>
           <div class="form-group">
             <div id="ai-proposal-result" class="template-preview" style="display:none;"></div>
           </div>

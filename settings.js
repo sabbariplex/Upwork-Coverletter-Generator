@@ -45,10 +45,13 @@ function setupEventListeners() {
   // Profile save
   const saveProfileBtn = document.getElementById('save-profile');
   if (saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfile);
+  // AI prompt save
+  const saveAiPromptBtn = document.getElementById('save-ai-prompt');
+  if (saveAiPromptBtn) saveAiPromptBtn.addEventListener('click', saveAICustomPrompt);
 }
 
 function loadAllSettings() {
-  chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'proposalMode'], function(result) {
+  chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'proposalMode', 'aiCustomPrompt'], function(result) {
     console.log('Loading settings:', result);
     
     // Your name
@@ -62,6 +65,10 @@ function loadAllSettings() {
     document.getElementById('custom-prompt').value = customPrompt;
     
     console.log('Custom prompt loaded:', customPrompt.substring(0, 100) + '...');
+
+    // AI custom prompt
+    const aiPromptEl = document.getElementById('ai-custom-prompt');
+    if (aiPromptEl) aiPromptEl.value = result.aiCustomPrompt || '';
 
     // Activate tab by saved mode (custom uses proposal prompt; ai uses AI Proposal tab)
     const mode = result.proposalMode || 'ai';
@@ -104,18 +111,6 @@ function saveCustomPrompt() {
     } else {
       console.log('Settings saved successfully:', { customPrompt, yourName });
       showStatusMessage('Settings saved successfully!', 'success');
-    }
-  });
-}
-
-function saveProfile() {
-  const nameInput = document.getElementById('your-name');
-  const yourName = nameInput ? nameInput.value.trim() : '';
-  chrome.storage.local.set({ yourName }, function() {
-    if (chrome.runtime.lastError) {
-      showStatusMessage('Error saving profile: ' + chrome.runtime.lastError.message, 'error');
-    } else {
-      showStatusMessage('Profile saved!', 'success');
     }
   });
 }
@@ -188,6 +183,30 @@ function generateAIProposalFromSettings() {
         }
       });
     });
+  });
+}
+
+function saveProfile() {
+  const nameInput = document.getElementById('your-name');
+  const yourName = nameInput ? nameInput.value.trim() : '';
+  chrome.storage.local.set({ yourName }, function() {
+    if (chrome.runtime.lastError) {
+      showStatusMessage('Error saving profile: ' + chrome.runtime.lastError.message, 'error');
+    } else {
+      showStatusMessage('Profile saved!', 'success');
+    }
+  });
+}
+
+function saveAICustomPrompt() {
+  const aiPromptEl = document.getElementById('ai-custom-prompt');
+  const aiCustomPrompt = aiPromptEl ? aiPromptEl.value.trim() : '';
+  chrome.storage.local.set({ aiCustomPrompt }, function() {
+    if (chrome.runtime.lastError) {
+      showStatusMessage('Error saving AI prompt: ' + chrome.runtime.lastError.message, 'error');
+    } else {
+      showStatusMessage('AI prompt saved!', 'success');
+    }
   });
 }
 

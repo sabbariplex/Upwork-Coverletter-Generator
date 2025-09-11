@@ -361,10 +361,13 @@ async function generateCoverLetter(jobTitle, jobDescription) {
     await loadUserUsage();
     
     // Get user settings from storage
-    const settings = await chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'openaiApiKey', 'openaiModel', 'openaiTemperature', 'proposalMode']);
+    const settings = await chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'openaiApiKey', 'openaiModel', 'openaiTemperature', 'proposalMode', 'aiCustomPrompt']);
     
-    // Generate the prompt using user settings
-    const prompt = generateCustomPrompt(jobTitle, jobDescription, settings);
+    // Decide which prompt to use depending on mode
+    const isAIMode = (settings.proposalMode || 'ai') === 'ai';
+    const prompt = isAIMode && settings.aiCustomPrompt && settings.aiCustomPrompt.trim().length > 0
+      ? settings.aiCustomPrompt.trim().replace(/\[Your Name\]/g, settings.yourName || 'Your Name')
+      : generateCustomPrompt(jobTitle, jobDescription, settings);
 
     // Validate inputs
     if (!jobTitle || !jobDescription) {
@@ -380,10 +383,8 @@ async function generateCoverLetter(jobTitle, jobDescription) {
       ? cleanJobDescription.substring(0, 2000) + '...' 
       : cleanJobDescription;
     
-    // Respect proposal mode
-    const mode = (settings.proposalMode || 'ai');
     // If AI mode and API key exists, try OpenAI first
-    if (mode === 'ai' && settings.openaiApiKey && settings.openaiApiKey.trim()) {
+    if (isAIMode && settings.openaiApiKey && settings.openaiApiKey.trim()) {
       try {
         const proposalViaOpenAI = await generateWithOpenAI({
           apiKey: settings.openaiApiKey.trim(),
@@ -401,7 +402,7 @@ async function generateCoverLetter(jobTitle, jobDescription) {
       }
     }
 
-    if (mode === 'custom') {
+    if (!isAIMode) {
       // Directly use local generation with custom prompt
       return generateLocalProposalWithCustomPrompt(cleanJobTitle, truncatedJobDescription, settings, prompt);
     }
@@ -458,16 +459,20 @@ async function generateCoverLetter(jobTitle, jobDescription) {
     
     // Get settings for fallback
     const settings = await chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings']);
-    
+    // Ensure we have safe title/description even if earlier variables were not set
+    const safeTitle = (jobTitle && jobTitle.toString ? jobTitle.toString().trim() : 'Job Application');
+    const safeDescFull = (jobDescription && jobDescription.toString ? jobDescription.toString().trim() : '');
+    const safeDesc = safeDescFull.length > 2000 ? (safeDescFull.substring(0, 2000) + '...') : safeDescFull;
+
     // Try to use custom prompt as final fallback
     if (settings.customPrompt) {
       console.log('Using custom prompt as final fallback');
-      return generateLocalProposalWithCustomPrompt(cleanJobTitle, truncatedJobDescription, settings, settings.customPrompt);
+      return generateLocalProposalWithCustomPrompt(safeTitle, safeDesc, settings, settings.customPrompt);
     }
     
     // Ultimate fallback to basic cover letter if no custom prompt
     const signatureName = settings.yourName || 'Your Name';
-    return `I have 4 years of experience in SEO and I'm really excited about this ${cleanJobTitle} project. I've worked on similar stuff before and I think I can help you out here.
+    return `I have 4 years of experience in SEO and I'm really excited about this ${safeTitle} project. I've worked on similar stuff before and I think I can help you out here.
 
 I usually focus on getting things done right the first time and keeping you updated along the way. I'm pretty flexible with timelines and can start whenever you need me.
 
