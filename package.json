@@ -1,0 +1,25 @@
+{
+  "name": "upwork-cover-letter-generator",
+  "version": "1.0.0",
+  "description": "Chrome extension that automatically generates cover letters for Upwork job applications",
+  "main": "content.js",
+  "scripts": {
+    "build": "echo 'No build process needed for this extension'",
+    "test": "echo 'No tests specified'"
+  },
+  "keywords": [
+    "chrome-extension",
+    "upwork",
+    "cover-letter",
+    "automation",
+    "freelancing"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/upwork-cover-letter-generator"
+  },
+  "devDependencies": {},
+  "dependencies": {}
+}

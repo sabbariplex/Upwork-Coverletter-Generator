@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Upwork Cover Letter Generator",
+  "version": "1.0",
+  "description": "Automatically generates cover letters for Upwork job applications based on job descriptions",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.upwork.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.upwork.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Upwork Cover Letter Generator"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["settings.html", "subscription.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

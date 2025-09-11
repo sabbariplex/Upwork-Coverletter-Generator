@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Subscription Management - Upwork Cover Letter Generator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 30px 20px;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      color: white;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px 30px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .header h1 {
+      font-size: 3rem;
+      margin-bottom: 15px;
+      font-weight: 700;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+    
+    .header p {
+      font-size: 1.2rem;
+      opacity: 0.95;
+      font-weight: 400;
+    }
+    
+    .subscription-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 40px;
+    }
+    
+    .subscription-card {
+      background: rgba(255, 255, 255, 0.98);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .subscription-card.featured {
+      border: 3px solid #667eea;
+      transform: scale(1.05);
+    }
+    
+    .subscription-card.featured::before {
+      content: 'MOST POPULAR';
+      position: absolute;
+      top: 20px;
+      right: -30px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      padding: 8px 40px;
+      font-size: 12px;
+      font-weight: 700;
+      transform: rotate(45deg);
+      letter-spacing: 1px;
+    }
+    
+    .subscription-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+    }
+    
+    .subscription-card.featured:hover {
+      transform: scale(1.05) translateY(-5px);
+    }
+    
+    .plan-name {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #2d3748;
+    }
+    
+    .plan-price {
+      font-size: 3rem;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 20px;
+    }
+    
+    .plan-price .period {
+      font-size: 1rem;
+      color: #718096;
+      font-weight: 400;
+    }
+    
+    .plan-features {
+      list-style: none;
+      margin-bottom: 30px;
+    }
+    
+    .plan-features li {
+      padding: 10px 0;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .plan-features li:last-child {
+      border-bottom: none;
+    }
+    
+    .plan-features li::before {
+      content: '✓';
+      color: #48bb78;
+      font-weight: 700;
+      font-size: 18px;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 16px 28px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+      background: #f8fafc;
+      color: #4a5568;
+      border: 2px solid #e2e8f0;
+    }
+    
+    .btn-secondary:hover {
+      background: #edf2f7;
+      border-color: #cbd5e0;
+      transform: translateY(-2px);
+    }
+    
+    .current-plan {
+      background: linear-gradient(135deg, #48bb78, #38a169);
+      color: white;
+      text-align: center;
+      padding: 20px;
+      border-radius: 15px;
+      margin-bottom: 30px;
+    }
+    
+    .usage-stats {
+      background: rgba(255, 255, 255, 0.98);
+      border-radius: 20px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    }
+    
+    .usage-stats h3 {
+      margin-bottom: 20px;
+      color: #2d3748;
+      font-size: 1.5rem;
+    }
+    
+    .usage-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .usage-item:last-child {
+      border-bottom: none;
+    }
+    
+    .usage-label {
+      font-weight: 600;
+      color: #4a5568;
+    }
+    
+    .usage-value {
+      font-weight: 700;
+      color: #2d3748;
+    }
+    
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      transition: width 0.3s ease;
+    }
+    
+    @media (max-width: 768px) {
+      .subscription-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+      
+      .container {
+        padding: 15px;
+      }
+      
+      .header h1 {
+        font-size: 2.2rem;
+      }
+      
+      .subscription-card {
+        padding: 30px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚀 Upgrade Your Plan</h1>
+      <p>Unlock unlimited AI-powered proposals and boost your Upwork success</p>
+    </div>
+    
+    <div id="current-plan-info" class="current-plan hidden">
+      <h3>Current Plan: <span id="current-plan-name">Free</span></h3>
+      <p>Proposals used: <span id="current-usage">0</span>/<span id="current-limit">50</span></p>
+    </div>
+    
+    <div class="usage-stats">
+      <h3>📊 Usage Statistics</h3>
+      <div class="usage-item">
+        <span class="usage-label">Proposals Generated</span>
+        <span class="usage-value" id="total-proposals">0</span>
+      </div>
+      <div class="usage-item">
+        <span class="usage-label">Remaining (Free Tier)</span>
+        <span class="usage-value" id="remaining-proposals">50</span>
+      </div>
+      <div class="usage-item">
+        <span class="usage-label">Plan Status</span>
+        <span class="usage-value" id="plan-status">Free</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="usage-progress" style="width: 0%"></div>
+      </div>
+    </div>
+    
+    <div class="subscription-grid">
+      <div class="subscription-card">
+        <div class="plan-name">Free</div>
+        <div class="plan-price">$0<span class="period">/month</span></div>
+        <ul class="plan-features">
+          <li>50 AI-generated proposals</li>
+          <li>Basic customization</li>
+          <li>Standard support</li>
+          <li>Upwork integration</li>
+        </ul>
+        <button class="btn btn-secondary" disabled>Current Plan</button>
+      </div>
+      
+      <div class="subscription-card featured">
+        <div class="plan-name">Premium</div>
+        <div class="plan-price">$9.99<span class="period">/month</span></div>
+        <ul class="plan-features">
+          <li>Unlimited AI proposals</li>
+          <li>Advanced customization</li>
+          <li>Priority support</li>
+          <li>Multiple templates</li>
+          <li>Analytics dashboard</li>
+          <li>Export/Import settings</li>
+        </ul>
+        <button class="btn btn-primary" id="upgrade-btn">Upgrade Now</button>
+      </div>
+    </div>
+    
+    <div style="text-align: center; margin-top: 30px;">
+      <p style="color: rgba(255, 255, 255, 0.8); font-size: 14px;">
+        💳 Secure payment processing • 🔄 Cancel anytime • 🎯 30-day money-back guarantee
+      </p>
+    </div>
+  </div>
+  
+  <script src="subscription.js"></script>
+</body>
+</html>
