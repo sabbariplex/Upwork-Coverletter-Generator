@@ -352,7 +352,7 @@ async function generateCoverLetter(jobTitle, jobDescription) {
     await loadUserUsage();
     
     // Get user settings from storage
-    const settings = await chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'openaiApiKey', 'openaiModel', 'openaiTemperature']);
+    const settings = await chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'openaiApiKey', 'openaiModel', 'openaiTemperature', 'proposalMode']);
     
     // Generate the prompt using user settings
     const prompt = generateCustomPrompt(jobTitle, jobDescription, settings);
@@ -371,8 +371,10 @@ async function generateCoverLetter(jobTitle, jobDescription) {
       ? cleanJobDescription.substring(0, 2000) + '...' 
       : cleanJobDescription;
     
-    // If user has provided an OpenAI API key, try OpenAI first
-    if (settings.openaiApiKey && settings.openaiApiKey.trim()) {
+    // Respect proposal mode
+    const mode = (settings.proposalMode || 'ai');
+    // If AI mode and API key exists, try OpenAI first
+    if (mode === 'ai' && settings.openaiApiKey && settings.openaiApiKey.trim()) {
       try {
         const proposalViaOpenAI = await generateWithOpenAI({
           apiKey: settings.openaiApiKey.trim(),
@@ -388,6 +390,11 @@ async function generateCoverLetter(jobTitle, jobDescription) {
         console.warn('OpenAI generation failed, will try backend/local fallback:', openAiErr);
         // fall through to backend/local
       }
+    }
+
+    if (mode === 'custom') {
+      // Directly use local generation with custom prompt
+      return generateLocalProposalWithCustomPrompt(cleanJobTitle, truncatedJobDescription, settings, prompt);
     }
 
     console.log('Sending request to backend API...');
@@ -492,8 +499,8 @@ chrome.action.onClicked.addListener((tab) => {
 
 // Generate proposal via OpenAI Chat Completions
 async function generateWithOpenAI({ apiKey, model, temperature, jobTitle, jobDescription, customPrompt, yourName }) {
-  const systemMessage = 'You are an expert Upwork freelancer who writes concise, tailored proposals that reflect the job requirements and the freelancer\'s strengths. Keep it professional, clear, and under 250-300 words.';
-  const userMessage = `Job Title: ${jobTitle}\n\nJob Description:\n${jobDescription}\n\nCustom Proposal Template (use as guidance; replace [Your Name] with the provided name):\n${customPrompt}\n\nWrite a complete proposal that is tailored to this job. Sign off as ${yourName}.`;
+  const systemMessage = 'You are an expert Upwork freelancer. You write proposals that are SPECIFIC to the job description, concise (180-260 words), professional, and outcome-focused. You always mirror the client\'s terminology, mention 3-5 concrete matching requirements/skills pulled from the job description, and state a brief plan. No fluff, no generic claims.';
+  const userMessage = `Write a tailored Upwork proposal for this job.\n\nJOB TITLE:\n${jobTitle}\n\nJOB DESCRIPTION (analyze and extract key requirements/skills/stack):\n${jobDescription}\n\nSTYLE GUIDANCE (optional, only use if it improves the proposal):\n${customPrompt || '(no custom style provided)'}\n\nSTRICT REQUIREMENTS:\n- Start with 1-2 lines that reflect the client\'s goal in their own words.\n- Include 3-5 bullet points mapping my experience to SPECIFIC requirements/keywords from the description (quote short phrases when relevant).\n- Add a short plan (3-4 steps) for how I will approach the project.\n- Ask 1-2 clarifying questions that matter to delivery.\n- Keep it under 260 words.\n- Sign off as ${yourName}.`;
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {

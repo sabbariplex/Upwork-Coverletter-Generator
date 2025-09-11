@@ -14,6 +14,13 @@ document.addEventListener('DOMContentLoaded', function() {
       tab.classList.add('active');
       const targetTab = tab.getAttribute('data-tab');
       document.getElementById(targetTab).classList.add('active');
+
+      // Persist proposal mode based on active tab
+      if (targetTab === 'custom-instructions') {
+        chrome.storage.local.set({ proposalMode: 'custom' });
+      } else if (targetTab === 'ai-proposal') {
+        chrome.storage.local.set({ proposalMode: 'ai' });
+      }
     });
   });
   
@@ -32,16 +39,13 @@ function setupEventListeners() {
 
   // No proposal mode toggles (guided removed)
 
-  // OpenAI settings
-  const saveOpenAiBtn = document.getElementById('save-openai-settings');
-  if (saveOpenAiBtn) saveOpenAiBtn.addEventListener('click', saveOpenAISettings);
-
-  const testOpenAiBtn = document.getElementById('test-openai-generation');
-  if (testOpenAiBtn) testOpenAiBtn.addEventListener('click', testOpenAIGeneration);
+  // AI Proposal tab action
+  const genAiBtn = document.getElementById('generate-ai-proposal');
+  if (genAiBtn) genAiBtn.addEventListener('click', generateAIProposalFromSettings);
 }
 
 function loadAllSettings() {
-  chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'openaiApiKey', 'openaiModel', 'openaiTemperature'], function(result) {
+  chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'proposalMode'], function(result) {
     console.log('Loading settings:', result);
     
     // Your name
@@ -55,12 +59,11 @@ function loadAllSettings() {
     
     console.log('Custom prompt loaded:', customPrompt.substring(0, 100) + '...');
 
-    // OpenAI
-    if (document.getElementById('openai-api-key')) {
-      document.getElementById('openai-api-key').value = result.openaiApiKey || '';
-      document.getElementById('openai-model').value = result.openaiModel || 'gpt-3.5-turbo';
-      document.getElementById('openai-temperature').value = (typeof result.openaiTemperature === 'number' ? result.openaiTemperature : 0.7);
-    }
+    // Activate tab by saved mode (custom uses proposal prompt; ai uses AI Proposal tab)
+    const mode = result.proposalMode || 'ai';
+    const toActivate = mode === 'custom' ? 'custom-instructions' : 'ai-proposal';
+    const tabBtn = Array.from(document.querySelectorAll('.tab')).find(t => t.getAttribute('data-tab') === toActivate);
+    if (tabBtn) tabBtn.click();
   });
 }
 
@@ -129,32 +132,20 @@ function showStatusMessage(message, type) {
   }, 5000);
 }
 
-function saveOpenAISettings() {
-  const apiKey = document.getElementById('openai-api-key').value.trim();
-  const model = document.getElementById('openai-model').value.trim() || 'gpt-3.5-turbo';
-  const temperatureInput = document.getElementById('openai-temperature').value;
-  const temperature = temperatureInput === '' ? 0.7 : Math.max(0, Math.min(1, parseFloat(temperatureInput)));
-  chrome.storage.local.set({ openaiApiKey: apiKey, openaiModel: model, openaiTemperature: temperature }, function() {
-    if (chrome.runtime.lastError) {
-      console.error('Error saving OpenAI settings:', chrome.runtime.lastError);
-      showStatusMessage('Error saving OpenAI settings: ' + chrome.runtime.lastError.message, 'error');
-    } else {
-      showStatusMessage('OpenAI settings saved!', 'success');
-    }
-  });
-}
-
-function testOpenAIGeneration() {
-  const resultDiv = document.getElementById('openai-test-result');
+function generateAIProposalFromSettings() {
+  const resultDiv = document.getElementById('ai-proposal-result');
   if (resultDiv) {
     resultDiv.style.display = 'block';
     resultDiv.textContent = 'Generating proposal from current Upwork tab...';
   }
 
+  // Persist mode as AI when user is on this tab
+  chrome.storage.local.set({ proposalMode: 'ai' });
+
   chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
     const tab = tabs && tabs[0];
     if (!tab || !tab.url || !tab.url.includes('upwork.com')) {
-      showStatusMessage('Open an Upwork job page to test.', 'error');
+      showStatusMessage('Open an Upwork job page to generate.', 'error');
       if (resultDiv) resultDiv.textContent = 'Please open an Upwork job posting page and try again.';
       return;
     }
@@ -170,7 +161,7 @@ function testOpenAIGeneration() {
       chrome.runtime.sendMessage({ action: 'generateCoverLetter', jobTitle: resp.jobTitle, jobDescription: resp.jobDescription }, function(bgResp) {
         if (bgResp && bgResp.success) {
           if (resultDiv) resultDiv.textContent = bgResp.coverLetter;
-          showStatusMessage('Generated with OpenAI!', 'success');
+          showStatusMessage('AI proposal generated!', 'success');
           // Also attempt to fill the cover letter on page
           chrome.tabs.sendMessage(tab.id, { action: 'fillCoverLetter', coverLetter: bgResp.coverLetter });
         } else {

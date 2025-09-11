@@ -49,13 +49,21 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Function to load settings from storage
   function loadSettings() {
-    chrome.storage.local.get(['autoFill', 'notifications'], function(result) {
+    chrome.storage.local.get(['autoFill', 'notifications', 'openaiApiKey', 'openaiModel', 'openaiTemperature'], function(result) {
       if (result.autoFill !== false) {
         autoFillToggle.classList.add('active');
       }
       if (result.notifications !== false) {
         notificationsToggle.classList.add('active');
       }
+
+      // OpenAI fields
+      const keyEl = document.getElementById('openai-api-key-popup');
+      const modelEl = document.getElementById('openai-model-popup');
+      const tempEl = document.getElementById('openai-temp-popup');
+      if (keyEl) keyEl.value = result.openaiApiKey || '';
+      if (modelEl) modelEl.value = result.openaiModel || 'gpt-3.5-turbo';
+      if (tempEl) tempEl.value = (typeof result.openaiTemperature === 'number' ? result.openaiTemperature : 0.7);
     });
   }
   
@@ -68,6 +76,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     chrome.storage.local.set(settings, function() {
       console.log('Settings saved');
+    });
+  }
+
+  // Save OpenAI config from popup
+  const saveOpenAiPopupBtn = document.getElementById('save-openai-popup');
+  if (saveOpenAiPopupBtn) {
+    saveOpenAiPopupBtn.addEventListener('click', function() {
+      const apiKey = (document.getElementById('openai-api-key-popup').value || '').trim();
+      const model = (document.getElementById('openai-model-popup').value || 'gpt-3.5-turbo').trim();
+      const tempRaw = document.getElementById('openai-temp-popup').value;
+      const temperature = tempRaw === '' ? 0.7 : Math.max(0, Math.min(1, parseFloat(tempRaw)));
+      chrome.storage.local.set({ openaiApiKey: apiKey, openaiModel: model, openaiTemperature: temperature }, function() {
+        showNotification('OpenAI settings saved');
+      });
     });
   }
   

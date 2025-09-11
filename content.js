@@ -14,6 +14,22 @@ function extractJobDescription() {
   try {
     console.log('Attempting to extract job description...');
     
+  // Priority 1: .job-details-content
+  const jobDetailsContent = document.querySelector('.job-details-content');
+  if (jobDetailsContent && jobDetailsContent.textContent && jobDetailsContent.textContent.trim().length > 50) {
+    const text = jobDetailsContent.textContent.trim();
+    console.log('Found job description in .job-details-content:', text.substring(0, 100) + '...');
+    return text;
+  }
+
+  // Priority 2: .fe-job-details
+  const feDetails = document.querySelector('.fe-job-details');
+  if (feDetails && feDetails.textContent && feDetails.textContent.trim().length > 50) {
+    const text = feDetails.textContent.trim();
+    console.log('Found job description in .fe-job-details:', text.substring(0, 100) + '...');
+    return text;
+  }
+
   // Try multiple selectors to find job description
   const selectors = [
       // Upwork specific selectors
@@ -21,6 +37,8 @@ function extractJobDescription() {
       '[data-cy="job-description"]',
     '.job-description',
       '.job-description-text',
+      '.job-details-content',
+      '.fe-job-details',
       // More specific selectors for job content
       '[data-test="job-details"] .up-card-section',
       '.up-card-section[data-test="job-details"]',
