@@ -466,6 +466,31 @@ function fillCoverLetterField(coverLetter) {
   }
 }
 
+// Lightweight message handler for settings page interactions
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  try {
+    if (request && request.action === 'extractJobData') {
+      const jobTitle = extractJobTitle();
+      const jobDescription = extractJobDescription();
+      if (jobDescription) {
+        sendResponse({ success: true, jobTitle, jobDescription });
+      } else {
+        sendResponse({ success: false, error: 'No job description found' });
+      }
+      return true;
+    }
+    if (request && request.action === 'fillCoverLetter' && request.coverLetter) {
+      fillCoverLetterField(request.coverLetter);
+      sendResponse({ success: true });
+      return true;
+    }
+  } catch (e) {
+    console.error('Content script handler error:', e);
+    sendResponse({ success: false, error: e.message });
+  }
+  return false;
+});
+
 // Function to show notification
 function showNotification(message, type = 'success') {
   // Create notification element

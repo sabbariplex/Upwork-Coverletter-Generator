@@ -345,14 +345,14 @@ function extractFieldFromDescription(description) {
   return 'web development'; // Default field
 }
 
-// Function to generate cover letter using your backend API
+// Function to generate cover letter using OpenAI if API key is set, otherwise your backend API
 async function generateCoverLetter(jobTitle, jobDescription) {
   try {
     // Load user usage data first
     await loadUserUsage();
     
     // Get user settings from storage
-    const settings = await chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings']);
+    const settings = await chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'openaiApiKey', 'openaiModel', 'openaiTemperature']);
     
     // Generate the prompt using user settings
     const prompt = generateCustomPrompt(jobTitle, jobDescription, settings);
@@ -371,6 +371,25 @@ async function generateCoverLetter(jobTitle, jobDescription) {
       ? cleanJobDescription.substring(0, 2000) + '...' 
       : cleanJobDescription;
     
+    // If user has provided an OpenAI API key, try OpenAI first
+    if (settings.openaiApiKey && settings.openaiApiKey.trim()) {
+      try {
+        const proposalViaOpenAI = await generateWithOpenAI({
+          apiKey: settings.openaiApiKey.trim(),
+          model: (settings.openaiModel && settings.openaiModel.trim()) || DEFAULT_CONFIG.DEFAULT_MODEL,
+          temperature: typeof settings.openaiTemperature === 'number' ? settings.openaiTemperature : DEFAULT_CONFIG.TEMPERATURE,
+          jobTitle: cleanJobTitle,
+          jobDescription: truncatedJobDescription,
+          customPrompt: prompt,
+          yourName: settings.yourName || 'Your Name'
+        });
+        return proposalViaOpenAI;
+      } catch (openAiErr) {
+        console.warn('OpenAI generation failed, will try backend/local fallback:', openAiErr);
+        // fall through to backend/local
+      }
+    }
+
     console.log('Sending request to backend API...');
     
     // Try to call your backend API first
@@ -470,3 +489,33 @@ chrome.action.onClicked.addListener((tab) => {
     chrome.tabs.create({ url: 'https://www.upwork.com' });
   }
 });
+
+// Generate proposal via OpenAI Chat Completions
+async function generateWithOpenAI({ apiKey, model, temperature, jobTitle, jobDescription, customPrompt, yourName }) {
+  const systemMessage = 'You are an expert Upwork freelancer who writes concise, tailored proposals that reflect the job requirements and the freelancer\'s strengths. Keep it professional, clear, and under 250-300 words.';
+  const userMessage = `Job Title: ${jobTitle}\n\nJob Description:\n${jobDescription}\n\nCustom Proposal Template (use as guidance; replace [Your Name] with the provided name):\n${customPrompt}\n\nWrite a complete proposal that is tailored to this job. Sign off as ${yourName}.`;
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: userMessage }
+      ],
+      temperature: temperature,
+      max_tokens: DEFAULT_CONFIG.MAX_TOKENS
+    })
+  });
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} ${err}`);
+  }
+  const data = await response.json();
+  const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  if (!content) throw new Error('OpenAI returned no content');
+  return content.replace(/\[Your Name\]/g, yourName);
+}
