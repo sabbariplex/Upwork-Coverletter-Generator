@@ -68,7 +68,23 @@ function loadAllSettings() {
 
     // AI custom prompt
     const aiPromptEl = document.getElementById('ai-custom-prompt');
-    if (aiPromptEl) aiPromptEl.value = result.aiCustomPrompt || '';
+    if (aiPromptEl) {
+      const defaultAIPrompt = `Always start with "I have 8+ years of experience"
+Keep it under 5 lines
+Include a 3-step process
+Add 2-3 specific KPIs
+End with a clarifying question
+Tie deliverables to business outcomes (revenue, signups).
+Use industry-specific terminology
+Mention relevant tools (GSC, GA4, Screaming Frog, etc.)
+Choose the one that best matches the job description, or combine elements from different prompts to create your own!`;
+      aiPromptEl.value = result.aiCustomPrompt || defaultAIPrompt;
+      
+      // If no saved AI prompt exists, save the default one
+      if (!result.aiCustomPrompt) {
+        chrome.storage.local.set({ aiCustomPrompt: defaultAIPrompt });
+      }
+    }
 
     // Activate tab by saved mode (custom uses proposal prompt; ai uses AI Proposal tab)
     const mode = result.proposalMode || 'ai';

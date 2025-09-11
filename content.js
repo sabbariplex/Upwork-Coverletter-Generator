@@ -14,7 +14,15 @@ function extractJobDescription() {
   try {
     console.log('Attempting to extract job description...');
     
-  // Priority 1: .job-details-content
+  // Priority 1: .job-details-content .text-body-sm (most specific and accurate)
+  const jobDetailsText = document.querySelector('.job-details-content .text-body-sm');
+  if (jobDetailsText && jobDetailsText.textContent && jobDetailsText.textContent.trim().length > 10) {
+    const text = jobDetailsText.textContent.trim();
+    console.log('Found job description in .job-details-content .text-body-sm:', text.substring(0, 100) + '...');
+    return text;
+  }
+
+  // Priority 2: .job-details-content (fallback to parent container)
   const jobDetailsContent = document.querySelector('.job-details-content');
   if (jobDetailsContent && jobDetailsContent.textContent && jobDetailsContent.textContent.trim().length > 50) {
     const text = jobDetailsContent.textContent.trim();
@@ -22,7 +30,7 @@ function extractJobDescription() {
     return text;
   }
 
-  // Priority 2: .fe-job-details
+  // Priority 3: .fe-job-details
   const feDetails = document.querySelector('.fe-job-details');
   if (feDetails && feDetails.textContent && feDetails.textContent.trim().length > 50) {
     const text = feDetails.textContent.trim();
@@ -32,10 +40,11 @@ function extractJobDescription() {
 
   // Try multiple selectors to find job description
   const selectors = [
-      // Upwork specific selectors
-    '[data-test="job-description"]',
+      // Upwork specific selectors (most accurate first)
+      '.job-details-content .text-body-sm',
+      '[data-test="job-description"]',
       '[data-cy="job-description"]',
-    '.job-description',
+      '.job-description',
       '.job-description-text',
       '.job-details-content',
       '.fe-job-details',
@@ -51,7 +60,14 @@ function extractJobDescription() {
       // Look for content that's likely the job description
       '[class*="job-description"]',
       '[class*="job-details"]',
-      '[class*="job-content"]'
+      '[class*="job-content"]',
+      // Additional selectors for newer Upwork layouts
+      '.up-card-section p',
+      '.up-card-section div',
+      '[data-test="job-details"] p',
+      '[data-test="job-details"] div',
+      '.job-details p',
+      '.job-details div'
     ];
     
     console.log('Trying selectors...');
@@ -60,12 +76,14 @@ function extractJobDescription() {
     if (element && element.textContent.trim()) {
         const text = element.textContent.trim();
         console.log(`Found text with selector "${selector}":`, text.substring(0, 100) + '...');
+        console.log(`Full text for selector "${selector}":`, text);
         
         // Check if this looks like a job description (has reasonable length and content)
         if (text.length > 100 && text.length < 5000 && 
             !text.includes('Apply Now') && !text.includes('Submit Proposal') &&
             !text.includes('Posted') && !text.includes('Hourly range') &&
             !text.includes('Skills and expertise') && !text.includes('View job posting')) {
+          console.log(`Using text from selector "${selector}" as job description`);
           return text;
         }
       }
@@ -74,8 +92,33 @@ function extractJobDescription() {
     // Fallback: look for any element containing substantial text that might be job description
     console.log('Trying fallback methods...');
     
+    // First, try to find text that looks like a job description by keywords
+    const jobKeywords = ['looking for', 'need', 'require', 'project', 'work', 'experience', 'skills', 'CSS', 'Liquid', 'Shopify', 'jobs', 'efficient', 'communication'];
+    const allElements = document.querySelectorAll('div, section, article, p, span');
+    
+    for (const element of allElements) {
+      const text = element.textContent.trim();
+      if (text.length > 50 && text.length < 1000) {
+        // Check if this text contains job-related keywords
+        const hasJobKeywords = jobKeywords.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()));
+        if (hasJobKeywords && 
+            !text.includes('Apply Now') && 
+            !text.includes('Submit Proposal') && 
+            !text.includes('Navigation') &&
+            !text.includes('Menu') &&
+            !text.includes('Sign In') &&
+            !text.includes('Sign Up') &&
+            !text.includes('Profile') &&
+            !text.includes('Messages') &&
+            !text.includes('Hourly range') &&
+            !text.includes('Skills and expertise')) {
+          console.log('Found job description by keywords:', text);
+          return text;
+        }
+      }
+    }
+    
     // Look for the largest text block on the page that's likely job content
-    const allElements = document.querySelectorAll('div, section, article, p');
     let bestCandidate = null;
     let maxLength = 0;
     
@@ -570,6 +613,7 @@ async function generateAutoProposal() {
   console.log('Extracted job title:', jobTitle);
   console.log('Extracted job description length:', jobDescription ? jobDescription.length : 'null');
   console.log('Extracted job description preview:', jobDescription ? jobDescription.substring(0, 200) + '...' : 'null');
+  console.log('Full job description:', jobDescription);
   console.log('Extracted freelancer name:', freelancerName);
   console.log('Freelancer name type:', typeof freelancerName);
   console.log('Freelancer name length:', freelancerName ? freelancerName.length : 'null');
