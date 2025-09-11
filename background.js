@@ -111,6 +111,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ success: true, usage: userUsage });
     return true;
   }
+
+  if (request.action === 'resetUsage') {
+    const reset = { proposalsUsed: 0, subscriptionStatus: 'free', subscriptionExpiry: null, userId: null };
+    userUsage = { ...userUsage, ...reset };
+    saveUserUsage()
+      .then(() => sendResponse({ success: true, usage: userUsage }))
+      .catch((err) => sendResponse({ success: false, error: err && err.message ? err.message : String(err) }));
+    return true;
+  }
   
   if (request.action === 'checkSubscription') {
     checkSubscriptionStatus()

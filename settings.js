@@ -42,6 +42,9 @@ function setupEventListeners() {
   // AI Proposal tab action
   const genAiBtn = document.getElementById('generate-ai-proposal');
   if (genAiBtn) genAiBtn.addEventListener('click', generateAIProposalFromSettings);
+  // Profile save
+  const saveProfileBtn = document.getElementById('save-profile');
+  if (saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfile);
 }
 
 function loadAllSettings() {
@@ -49,7 +52,8 @@ function loadAllSettings() {
     console.log('Loading settings:', result);
     
     // Your name
-    document.getElementById('your-name').value = result.yourName || '';
+    const nameInput = document.getElementById('your-name');
+    if (nameInput) nameInput.value = result.yourName || '';
     
     // Guided fields removed
 
@@ -83,7 +87,8 @@ Best regards,
 
 function saveCustomPrompt() {
   const customPrompt = document.getElementById('custom-prompt').value.trim();
-  const yourName = document.getElementById('your-name').value.trim();
+  const nameInput = document.getElementById('your-name');
+  const yourName = nameInput ? nameInput.value.trim() : '';
   // No proposal mode
 
   // Allow empty custom prompt in custom mode (will generate from job only)
@@ -99,6 +104,18 @@ function saveCustomPrompt() {
     } else {
       console.log('Settings saved successfully:', { customPrompt, yourName });
       showStatusMessage('Settings saved successfully!', 'success');
+    }
+  });
+}
+
+function saveProfile() {
+  const nameInput = document.getElementById('your-name');
+  const yourName = nameInput ? nameInput.value.trim() : '';
+  chrome.storage.local.set({ yourName }, function() {
+    if (chrome.runtime.lastError) {
+      showStatusMessage('Error saving profile: ' + chrome.runtime.lastError.message, 'error');
+    } else {
+      showStatusMessage('Profile saved!', 'success');
     }
   });
 }

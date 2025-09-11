@@ -494,23 +494,31 @@
     <div id="status-message" class="status-message hidden"></div>
     
     <div class="tabs">
-      <button class="tab active" data-tab="custom-instructions">🎯 Proposal Prompt</button>
+      <button class="tab active" data-tab="profile">👤 Profile</button>
+      <button class="tab" data-tab="custom-instructions">🎯 Proposal Prompt</button>
       <button class="tab" data-tab="ai-proposal">📝 AI Proposal</button>
     </div>
     
-    <!-- Proposal Prompt Tab -->
-    <div id="custom-instructions" class="tab-content active">
+    <!-- Profile Tab -->
+    <div id="profile" class="tab-content active">
       <div class="settings-grid">
         <div class="settings-card">
           <h3 class="card-title">👤 Your Information</h3>
-          
           <div class="form-group">
             <label class="form-label" for="your-name">Your Name</label>
             <input type="text" id="your-name" class="form-input" placeholder="Enter your name">
             <div class="form-help">This will be used in proposal signatures</div>
           </div>
+          <div class="form-group">
+            <button class="btn btn-primary" id="save-profile">💾 Save Profile</button>
+          </div>
         </div>
-        
+      </div>
+    </div>
+
+    <!-- Proposal Prompt Tab -->
+    <div id="custom-instructions" class="tab-content">
+      <div class="settings-grid">
         <!-- Custom Template Card -->
         <div class="settings-card" style="grid-column: 1 / -1;">
           <h3 class="card-title">Custom Proposal</h3>
@@ -555,16 +563,14 @@ Best regards,
       <div class="settings-grid">
         <div class="settings-card" style="grid-column: 1 / -1;">
           <h3 class="card-title">📝 Generate AI Proposal</h3>
-          <p style="margin-bottom: 20px; color: #4a5568;">Open an Upwork job posting, then click the button below to generate and auto-fill an AI proposal.</p>
-          <div class="form-group">
-            <button class="btn btn-success" id="generate-ai-proposal">✨ Generate For Current Job Page</button>
-          </div>
+        
           <div class="form-group">
             <div id="ai-proposal-result" class="template-preview" style="display:none;"></div>
           </div>
         </div>
       </div>
     </div>
+
     
   </div>
   
