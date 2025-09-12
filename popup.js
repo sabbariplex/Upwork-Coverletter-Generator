@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Get elements
   const autoFillToggle = document.getElementById('auto-fill-toggle');
   const notificationsToggle = document.getElementById('notifications-toggle');
+  const autoAnswerQuestionsToggle = document.getElementById('auto-answer-questions-toggle');
   const generateBtn = document.getElementById('generate-btn');
   const currentJobDiv = document.getElementById('current-job');
   const jobTitleSpan = document.getElementById('job-title');
@@ -29,6 +30,11 @@ document.addEventListener('DOMContentLoaded', function() {
     saveSettings();
   });
   
+  autoAnswerQuestionsToggle.addEventListener('click', function() {
+    this.classList.toggle('active');
+    saveSettings();
+  });
+  
   // Button event listeners
   generateBtn.addEventListener('click', function() {
     generateCoverLetter();
@@ -49,12 +55,15 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Function to load settings from storage
   function loadSettings() {
-    chrome.storage.local.get(['autoFill', 'notifications', 'openaiApiKey', 'openaiModel', 'openaiTemperature'], function(result) {
+    chrome.storage.local.get(['autoFill', 'notifications', 'autoAnswerQuestions', 'openaiApiKey', 'openaiModel', 'openaiTemperature'], function(result) {
       if (result.autoFill !== false) {
         autoFillToggle.classList.add('active');
       }
       if (result.notifications !== false) {
         notificationsToggle.classList.add('active');
+      }
+      if (result.autoAnswerQuestions === true) {
+        autoAnswerQuestionsToggle.classList.add('active');
       }
 
       // OpenAI fields
@@ -71,7 +80,8 @@ document.addEventListener('DOMContentLoaded', function() {
   function saveSettings() {
     const settings = {
       autoFill: autoFillToggle.classList.contains('active'),
-      notifications: notificationsToggle.classList.contains('active')
+      notifications: notificationsToggle.classList.contains('active'),
+      autoAnswerQuestions: autoAnswerQuestionsToggle.classList.contains('active')
     };
     
     chrome.storage.local.set(settings, function() {

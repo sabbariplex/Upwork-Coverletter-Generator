@@ -408,6 +408,530 @@ function getKeyApproach(description) {
   }
 }
 
+// Function to detect additional questions in the application form
+function detectAdditionalQuestions() {
+  const questions = [];
+  
+  console.log('Starting question detection...');
+  
+  // Find all textarea elements that are likely question answer fields
+  const textareas = document.querySelectorAll('textarea');
+  console.log(`Found ${textareas.length} textarea elements`);
+  
+  // Log all textareas for debugging
+  textareas.forEach((textarea, index) => {
+    console.log(`Textarea ${index + 1}:`, {
+      id: textarea.id,
+      name: textarea.name,
+      placeholder: textarea.placeholder,
+      ariaLabelledBy: textarea.getAttribute('aria-labelledby'),
+      className: textarea.className,
+      parentClass: textarea.parentElement?.className,
+      isInQuestionsArea: textarea.closest('.fe-proposal-job-questions') || textarea.closest('.questions-area'),
+      isInCoverLetterArea: textarea.closest('.cover-letter-area')
+    });
+  });
+  
+  // Look for the "Additional details" section to better identify question fields
+  const additionalDetailsSection = document.querySelector('.fe-proposal-additional-details') || 
+                                  document.querySelector('[data-test*="additional"]') ||
+                                  document.querySelector('.additional-details');
+  
+  // Look specifically for the questions area within additional details
+  const questionsArea = document.querySelector('.fe-proposal-job-questions') ||
+                       document.querySelector('.questions-area');
+  
+  console.log('Additional details section found:', !!additionalDetailsSection);
+  console.log('Questions area found:', !!questionsArea);
+  
+  textareas.forEach((textarea, index) => {
+    // Skip if it's the main cover letter field - more comprehensive check
+    const isCoverLetterField = 
+      textarea.name === 'proposal' || textarea.id === 'proposal' || 
+      textarea.name === 'coverLetter' || textarea.id === 'coverLetter' ||
+      textarea.name === 'letter' || textarea.id === 'letter' ||
+      textarea.placeholder?.toLowerCase().includes('cover') ||
+      textarea.placeholder?.toLowerCase().includes('letter') ||
+      textarea.placeholder?.toLowerCase().includes('proposal') ||
+      textarea.getAttribute('aria-label')?.toLowerCase().includes('cover') ||
+      textarea.getAttribute('aria-label')?.toLowerCase().includes('letter') ||
+      textarea.getAttribute('aria-label')?.toLowerCase().includes('proposal') ||
+      textarea.getAttribute('aria-labelledby')?.includes('cover') ||
+      textarea.getAttribute('aria-labelledby')?.includes('letter') ||
+      textarea.getAttribute('aria-labelledby')?.includes('proposal') ||
+      textarea.className?.includes('cover') ||
+      textarea.className?.includes('letter') ||
+      textarea.className?.includes('proposal') ||
+      // Check if it's in the cover letter area
+      textarea.closest('.cover-letter-area') ||
+      // Check if the label text indicates it's a cover letter
+      (() => {
+        const labelElement = document.querySelector(`label[for="${textarea.id}"]`);
+        if (labelElement) {
+          const labelText = labelElement.textContent.toLowerCase();
+          return labelText.includes('cover') || labelText.includes('letter') || labelText.includes('proposal');
+        }
+        return false;
+      })() ||
+      // Check if any parent element contains cover letter indicators
+      (() => {
+        let parent = textarea.parentElement;
+        let depth = 0;
+        while (parent && depth < 3) {
+          const parentText = parent.textContent.toLowerCase();
+          if (parentText.includes('cover letter') || parentText.includes('proposal')) {
+            return true;
+          }
+          parent = parent.parentElement;
+          depth++;
+        }
+        return false;
+      })();
+    
+    if (isCoverLetterField) {
+      console.log(`Skipping cover letter field: ${textarea.name || textarea.id || textarea.placeholder || 'unknown'}`);
+      return;
+    }
+    
+    // Skip if element is hidden or disabled
+    if (textarea.offsetParent === null || textarea.disabled) {
+      console.log(`Skipping hidden/disabled textarea: ${textarea.name || textarea.id}`);
+      return;
+    }
+    
+    // Only process textareas that are specifically in the questions area
+    if (questionsArea) {
+      const isInQuestionsArea = questionsArea.contains(textarea);
+      if (!isInQuestionsArea) {
+        console.log(`Skipping textarea outside questions area: ${textarea.name || textarea.id || 'unknown'}`);
+        return;
+      }
+    } else {
+      // If no questions area found, skip all textareas
+      console.log(`No questions area found, skipping all textareas`);
+      return;
+    }
+    
+    // Look for the question text above this textarea
+    let questionText = '';
+    
+    // Method 1: Look for label element
+    const labelElement = document.querySelector(`label[for="${textarea.id}"]`);
+    if (labelElement) {
+      questionText = labelElement.textContent.trim();
+      console.log(`Found label for textarea ${index + 1}: "${questionText}"`);
+      
+      // Skip if this is clearly a cover letter field based on label
+      if (questionText.toLowerCase().includes('cover') || 
+          questionText.toLowerCase().includes('letter') || 
+          questionText.toLowerCase().includes('proposal')) {
+        console.log(`Skipping cover letter field based on label: "${questionText}"`);
+        return;
+      }
+    }
+    
+    // Method 2: Look for text content in previous siblings
+    if (!questionText) {
+      let currentElement = textarea.previousElementSibling;
+      while (currentElement && !questionText) {
+        if (currentElement.tagName === 'LABEL') {
+          questionText = currentElement.textContent.trim();
+          console.log(`Found label sibling for textarea ${index + 1}: "${questionText}"`);
+        } else if (currentElement.textContent && currentElement.textContent.trim().length > 10) {
+          // Check if this element contains question-like text
+          const text = currentElement.textContent.trim();
+          if (text.includes('?') || 
+              text.toLowerCase().includes('what') || 
+              text.toLowerCase().includes('how') || 
+              text.toLowerCase().includes('why') || 
+              text.toLowerCase().includes('when') || 
+              text.toLowerCase().includes('where') || 
+              text.toLowerCase().includes('describe') || 
+              text.toLowerCase().includes('explain') || 
+              text.toLowerCase().includes('tell') || 
+              text.toLowerCase().includes('share') || 
+              text.toLowerCase().includes('provide') || 
+              text.toLowerCase().includes('experience') || 
+              text.toLowerCase().includes('approach') || 
+              text.toLowerCase().includes('timeline') || 
+              text.toLowerCase().includes('budget') || 
+              text.toLowerCase().includes('portfolio') || 
+              text.toLowerCase().includes('background') || 
+              text.toLowerCase().includes('qualification') || 
+              text.toLowerCase().includes('skill') || 
+              text.toLowerCase().includes('expertise') || 
+              text.toLowerCase().includes('methodology') || 
+              text.toLowerCase().includes('process') || 
+              text.toLowerCase().includes('workflow') || 
+              text.toLowerCase().includes('deliverable') || 
+              text.toLowerCase().includes('milestone') || 
+              text.toLowerCase().includes('communication') || 
+              text.toLowerCase().includes('availability') || 
+              text.toLowerCase().includes('rate') || 
+              text.toLowerCase().includes('cost') || 
+              text.toLowerCase().includes('price') || 
+              text.toLowerCase().includes('fee') || 
+              text.toLowerCase().includes('payment') || 
+              text.toLowerCase().includes('sample') || 
+              text.toLowerCase().includes('example') || 
+              text.toLowerCase().includes('reference') || 
+              text.toLowerCase().includes('testimonial') || 
+              text.toLowerCase().includes('review') || 
+              text.toLowerCase().includes('feedback') || 
+              text.toLowerCase().includes('client') || 
+              text.toLowerCase().includes('project') || 
+              text.toLowerCase().includes('challenge') || 
+              text.toLowerCase().includes('problem') || 
+              text.toLowerCase().includes('solution') || 
+              text.toLowerCase().includes('result') || 
+              text.toLowerCase().includes('outcome') || 
+              text.toLowerCase().includes('success') || 
+              text.toLowerCase().includes('achievement') || 
+              text.toLowerCase().includes('accomplishment') || 
+              text.toLowerCase().includes('goal') || 
+              text.toLowerCase().includes('objective') || 
+              text.toLowerCase().includes('requirement') || 
+              text.toLowerCase().includes('specification') || 
+              text.toLowerCase().includes('scope') || 
+              text.toLowerCase().includes('expectation') || 
+              text.toLowerCase().includes('preference') || 
+              text.toLowerCase().includes('priority') || 
+              text.toLowerCase().includes('concern')) {
+            questionText = text;
+            console.log(`Found question text sibling for textarea ${index + 1}: "${questionText}"`);
+          }
+        }
+        currentElement = currentElement.previousElementSibling;
+      }
+    }
+    
+    // Method 3: Look for text content in parent elements
+    if (!questionText) {
+      let parentElement = textarea.parentElement;
+      let depth = 0;
+      while (parentElement && !questionText && depth < 5) {
+        // Look for text content in this parent
+        const parentText = parentElement.textContent.trim();
+        if (parentText && parentText.length > 10 && parentText.length < 500) {
+          // Check if this parent contains question-like text
+          if (parentText.includes('?') || 
+              parentText.toLowerCase().includes('what') || 
+              parentText.toLowerCase().includes('how') || 
+              parentText.toLowerCase().includes('why') || 
+              parentText.toLowerCase().includes('when') || 
+              parentText.toLowerCase().includes('where') || 
+              parentText.toLowerCase().includes('describe') || 
+              parentText.toLowerCase().includes('explain') || 
+              parentText.toLowerCase().includes('tell') || 
+              parentText.toLowerCase().includes('share') || 
+              parentText.toLowerCase().includes('provide') || 
+              parentText.toLowerCase().includes('experience') || 
+              parentText.toLowerCase().includes('approach') || 
+              parentText.toLowerCase().includes('timeline') || 
+              parentText.toLowerCase().includes('budget') || 
+              parentText.toLowerCase().includes('portfolio') || 
+              parentText.toLowerCase().includes('background') || 
+              parentText.toLowerCase().includes('qualification') || 
+              parentText.toLowerCase().includes('skill') || 
+              parentText.toLowerCase().includes('expertise') || 
+              parentText.toLowerCase().includes('methodology') || 
+              parentText.toLowerCase().includes('process') || 
+              parentText.toLowerCase().includes('workflow') || 
+              parentText.toLowerCase().includes('deliverable') || 
+              parentText.toLowerCase().includes('milestone') || 
+              parentText.toLowerCase().includes('communication') || 
+              parentText.toLowerCase().includes('availability') || 
+              parentText.toLowerCase().includes('rate') || 
+              parentText.toLowerCase().includes('cost') || 
+              parentText.toLowerCase().includes('price') || 
+              parentText.toLowerCase().includes('fee') || 
+              parentText.toLowerCase().includes('payment') || 
+              parentText.toLowerCase().includes('sample') || 
+              parentText.toLowerCase().includes('example') || 
+              parentText.toLowerCase().includes('reference') || 
+              parentText.toLowerCase().includes('testimonial') || 
+              parentText.toLowerCase().includes('review') || 
+              parentText.toLowerCase().includes('feedback') || 
+              parentText.toLowerCase().includes('client') || 
+              parentText.toLowerCase().includes('project') || 
+              parentText.toLowerCase().includes('challenge') || 
+              parentText.toLowerCase().includes('problem') || 
+              parentText.toLowerCase().includes('solution') || 
+              parentText.toLowerCase().includes('result') || 
+              parentText.toLowerCase().includes('outcome') || 
+              parentText.toLowerCase().includes('success') || 
+              parentText.toLowerCase().includes('achievement') || 
+              parentText.toLowerCase().includes('accomplishment') || 
+              parentText.toLowerCase().includes('goal') || 
+              parentText.toLowerCase().includes('objective') || 
+              parentText.toLowerCase().includes('requirement') || 
+              parentText.toLowerCase().includes('specification') || 
+              parentText.toLowerCase().includes('scope') || 
+              parentText.toLowerCase().includes('expectation') || 
+              parentText.toLowerCase().includes('preference') || 
+              parentText.toLowerCase().includes('priority') || 
+              parentText.toLowerCase().includes('concern')) {
+            questionText = parentText;
+            console.log(`Found question text in parent for textarea ${index + 1}: "${questionText}"`);
+          }
+        }
+        parentElement = parentElement.parentElement;
+        depth++;
+      }
+    }
+    
+    // Method 4: Use placeholder as fallback
+    if (!questionText) {
+      questionText = textarea.placeholder || `Question ${index + 1}`;
+      console.log(`Using placeholder for textarea ${index + 1}: "${questionText}"`);
+    }
+    
+    // Only add if we found a meaningful question text and it's not a cover letter
+    if (questionText && questionText.length > 10) { // Increased minimum length
+      // Additional check: Make sure this is not a cover letter field
+      const isCoverLetterByText = 
+        questionText.toLowerCase().includes('cover') ||
+        questionText.toLowerCase().includes('letter') ||
+        questionText.toLowerCase().includes('proposal');
+      
+      // Check if it looks like a real question (contains question words or ends with ?)
+      const looksLikeQuestion = 
+        questionText.includes('?') ||
+        questionText.toLowerCase().includes('what') ||
+        questionText.toLowerCase().includes('how') ||
+        questionText.toLowerCase().includes('why') ||
+        questionText.toLowerCase().includes('when') ||
+        questionText.toLowerCase().includes('where') ||
+        questionText.toLowerCase().includes('describe') ||
+        questionText.toLowerCase().includes('explain') ||
+        questionText.toLowerCase().includes('tell') ||
+        questionText.toLowerCase().includes('share') ||
+        questionText.toLowerCase().includes('provide') ||
+        questionText.toLowerCase().includes('briefly') ||
+        questionText.toLowerCase().includes('in your own words');
+      
+      if (!isCoverLetterByText && looksLikeQuestion) {
+        console.log(`Found question ${questions.length + 1}: "${questionText.substring(0, 100)}..." (textarea)`);
+        questions.push({
+          element: textarea,
+          label: questionText,
+          type: 'textarea',
+          placeholder: textarea.placeholder || '',
+          required: textarea.required || false
+        });
+      } else {
+        console.log(`Skipping textarea - not a valid question: "${questionText.substring(0, 50)}..."`);
+      }
+    } else {
+      console.log(`Skipping textarea - no valid question text found`);
+    }
+  });
+  
+  
+  console.log('Total questions detected:', questions.length);
+  return questions;
+}
+
+// Function to wait for page to be completely ready with all elements loaded
+function waitForPageToBeReady() {
+  return new Promise((resolve) => {
+    console.log('Waiting for page to be completely ready...');
+    
+    // First wait for basic page load
+    const waitForBasicLoad = () => {
+      if (document.readyState === 'complete') {
+        console.log('Basic page load complete, waiting for dynamic content...');
+        waitForDynamicContent();
+      } else {
+        window.addEventListener('load', () => {
+          console.log('Basic page load complete, waiting for dynamic content...');
+          waitForDynamicContent();
+        });
+      }
+    };
+    
+    const waitForDynamicContent = () => {
+      // Wait for common form elements to be present
+      const formSelectors = [
+        'form',
+        'textarea',
+        'input[type="text"]',
+        'input[type="email"]',
+        'input[type="tel"]',
+        'input[type="url"]',
+        'input[type="number"]',
+        'input[type="date"]',
+        'input[type="time"]',
+        'input[type="datetime-local"]',
+        'input[type="month"]',
+        'input[type="week"]',
+        'input[type="search"]',
+        'input[type="password"]',
+        'input[type="hidden"]',
+        'select',
+        'button[type="submit"]',
+        'button[type="button"]',
+        '[data-test*="form"]',
+        '[data-test*="input"]',
+        '[data-test*="textarea"]',
+        '[data-test*="button"]',
+        '[data-cy*="form"]',
+        '[data-cy*="input"]',
+        '[data-cy*="textarea"]',
+        '[data-cy*="button"]'
+      ];
+      
+      let foundElements = 0;
+      formSelectors.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        if (elements.length > 0) {
+          foundElements += elements.length;
+        }
+      });
+      
+      console.log(`Found ${foundElements} form elements`);
+      
+      // If we found form elements, wait a bit more for dynamic content
+      if (foundElements > 0) {
+        setTimeout(() => {
+          console.log('Form elements detected, waiting additional time for dynamic content...');
+          setTimeout(() => {
+            console.log('Page should be ready now');
+            resolve();
+          }, 5000); // Wait 5 more seconds for dynamic content
+        }, 3000); // Wait 3 seconds after finding elements
+      } else {
+        // If no form elements found, wait a bit and try again
+        setTimeout(() => {
+          console.log('No form elements found, retrying...');
+          waitForDynamicContent();
+        }, 2000); // Increased retry delay
+      }
+    };
+    
+    // Start the process
+    waitForBasicLoad();
+  });
+}
+
+// Function to generate answers for additional questions using ChatGPT
+async function generateQuestionAnswers(questions, jobTitle, jobDescription) {
+  if (questions.length === 0) return [];
+  
+  try {
+    // Send message to background script to generate answers
+    const response = await chrome.runtime.sendMessage({
+      action: 'generateQuestionAnswers',
+      questions: questions.map(q => ({
+        label: q.label,
+        type: q.type,
+        placeholder: q.placeholder,
+        required: q.required
+      })),
+      jobTitle: jobTitle,
+      jobDescription: jobDescription
+    });
+    
+    if (response && response.success) {
+      return response.answers || [];
+    } else {
+      console.error('Failed to generate question answers:', response?.error || 'Unknown error');
+      return [];
+    }
+  } catch (error) {
+    console.error('Error generating question answers:', error);
+    return [];
+  }
+}
+
+// Function to fill additional question fields with retry
+function fillQuestionFields(questions, answers) {
+  let filledCount = 0;
+  
+  questions.forEach((question, index) => {
+    if (answers[index]) {
+      const element = question.element;
+      
+      // Check if element is still in the DOM and visible
+      if (element && element.offsetParent !== null && !element.disabled) {
+        // Additional check: Make sure this is not the cover letter field
+        const isCoverLetterField = 
+          element.name === 'proposal' || element.id === 'proposal' || 
+          element.name === 'coverLetter' || element.id === 'coverLetter' ||
+          element.name === 'letter' || element.id === 'letter' ||
+          element.placeholder?.toLowerCase().includes('cover') ||
+          element.placeholder?.toLowerCase().includes('letter') ||
+          element.placeholder?.toLowerCase().includes('proposal') ||
+          element.getAttribute('aria-label')?.toLowerCase().includes('cover') ||
+          element.getAttribute('aria-label')?.toLowerCase().includes('letter') ||
+          element.getAttribute('aria-label')?.toLowerCase().includes('proposal') ||
+          element.getAttribute('aria-labelledby')?.includes('cover') ||
+          element.getAttribute('aria-labelledby')?.includes('letter') ||
+          element.getAttribute('aria-labelledby')?.includes('proposal') ||
+          element.className?.includes('cover') ||
+          element.className?.includes('letter') ||
+          element.className?.includes('proposal');
+        
+        if (isCoverLetterField) {
+          console.log(`Skipping cover letter field when filling questions: ${element.name || element.id || element.placeholder || 'unknown'}`);
+          return;
+        }
+        
+        // Check if field already has content (might be cover letter)
+        if (element.value && element.value.trim().length > 50) {
+          console.log(`Skipping field with existing content (likely cover letter): "${element.value.substring(0, 50)}..."`);
+          return;
+        }
+        
+        try {
+          element.focus();
+          element.value = answers[index];
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+          element.dispatchEvent(new Event('blur', { bubbles: true }));
+          filledCount++;
+          console.log(`Filled question ${index + 1}: "${question.label}"`);
+        } catch (error) {
+          console.error(`Error filling question ${index + 1}:`, error);
+        }
+      } else {
+        console.warn(`Question element ${index + 1} is not available or visible`);
+      }
+    }
+  });
+  
+  console.log(`Successfully filled ${filledCount} out of ${questions.length} question fields`);
+  return filledCount;
+}
+
+// Function to fill question fields with retry mechanism
+function fillQuestionFieldsWithRetry(questions, answers, maxAttempts = 5) {
+  return new Promise((resolve) => {
+    let attempts = 0;
+    
+    const tryFill = () => {
+      attempts++;
+      console.log(`Attempt ${attempts} to fill question fields...`);
+      
+      const filledCount = fillQuestionFields(questions, answers);
+      
+      if (filledCount === questions.length) {
+        console.log('All question fields filled successfully');
+        resolve(true);
+      } else if (attempts < maxAttempts) {
+        console.log(`Only filled ${filledCount}/${questions.length} fields, retrying in 3 seconds...`);
+        setTimeout(tryFill, 3000); // Increased delay between attempts
+      } else {
+        console.log(`Max attempts reached, filled ${filledCount}/${questions.length} fields`);
+        resolve(filledCount > 0);
+      }
+    };
+    
+    // Wait a bit before starting
+    setTimeout(tryFill, 1000);
+  });
+}
+
 // Function to modify apply button
 function modifyApplyButton() {
   // Find apply button
@@ -545,6 +1069,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: true });
       return true;
     }
+    if (request && request.action === 'detectQuestions') {
+      const questions = detectAdditionalQuestions();
+      sendResponse({ success: true, questions: questions });
+      return true;
+    }
   } catch (e) {
     console.error('Content script handler error:', e);
     sendResponse({ success: false, error: e.message });
@@ -645,16 +1174,73 @@ async function generateAutoProposal() {
       if (response.success) {
         const coverLetter = response.coverLetter;
         
-        // Try to fill the cover letter field immediately
-        fillCoverLetterField(coverLetter);
-        
-        // Also try after a delay in case the field loads later
-        setTimeout(() => {
+        // Wait for page to be ready before filling cover letter
+        waitForPageToBeReady().then(() => {
+          console.log('Page is ready, filling cover letter...');
+          
+          // Fill cover letter with multiple attempts and longer delays
           fillCoverLetterField(coverLetter);
-        }, 2000);
+          
+          // Try again after 2 seconds
+          setTimeout(() => {
+            console.log('Second attempt to fill cover letter...');
+            fillCoverLetterField(coverLetter);
+          }, 2000);
+          
+          // Try again after 4 seconds
+          setTimeout(() => {
+            console.log('Third attempt to fill cover letter...');
+            fillCoverLetterField(coverLetter);
+          }, 4000);
+        });
         
-        // Show success notification
-        showNotification('AI proposal generated and filled!', 'success');
+        // Check if auto-answer questions is enabled
+        chrome.storage.local.get(['autoAnswerQuestions'], function(result) {
+          const autoAnswerQuestions = result.autoAnswerQuestions === true;
+          console.log('Auto-answer questions setting:', autoAnswerQuestions);
+          
+          if (autoAnswerQuestions) {
+            // Wait for page to be completely loaded and form elements to be ready
+            // Add extra delay to ensure cover letter is filled first
+            setTimeout(() => {
+              console.log('Waiting additional 5 seconds before question detection...');
+              setTimeout(() => {
+                waitForPageToBeReady().then(() => {
+                  console.log('Page is ready, detecting additional questions...');
+                  const additionalQuestions = detectAdditionalQuestions();
+                  console.log('Detected questions:', additionalQuestions);
+                  
+                  if (additionalQuestions.length > 0) {
+                    console.log('Generating answers for', additionalQuestions.length, 'questions');
+                    generateQuestionAnswers(additionalQuestions, jobTitle, jobDescription)
+                      .then(answers => {
+                        console.log('Generated answers:', answers);
+                        return fillQuestionFieldsWithRetry(additionalQuestions, answers);
+                      })
+                      .then(success => {
+                        if (success) {
+                          showNotification(`AI proposal and ${additionalQuestions.length} question answers generated!`, 'success');
+                        } else {
+                          showNotification('AI proposal generated! (Some questions could not be filled)', 'success');
+                        }
+                      })
+                      .catch(error => {
+                        console.error('Error generating question answers:', error);
+                        showNotification('AI proposal generated! (Questions could not be filled)', 'success');
+                      });
+                  } else {
+                    console.log('No additional questions detected');
+                    showNotification('AI proposal generated and filled!', 'success');
+                  }
+                });
+              }, 5000); // Wait additional 5 seconds
+            }, 3000); // Wait 3 seconds after cover letter is filled
+          } else {
+            console.log('Auto-answer questions is disabled');
+            showNotification('AI proposal generated and filled!', 'success');
+          }
+        });
+        
         console.log('Proposal generated successfully:', coverLetter);
       } else {
         throw new Error(response.error || 'Failed to generate proposal');

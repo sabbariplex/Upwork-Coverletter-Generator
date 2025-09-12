@@ -59,10 +59,21 @@ function setupEventListeners() {
   if (customAIPromptField) {
     customAIPromptField.addEventListener('input', saveCustomAIPrompt);
   }
+  
+  // Question Settings functionality
+  const autoAnswerQuestionsCheckbox = document.getElementById('auto-answer-questions');
+  if (autoAnswerQuestionsCheckbox) {
+    autoAnswerQuestionsCheckbox.addEventListener('change', saveQuestionSettings);
+  }
+  
+  const saveQuestionSettingsBtn = document.getElementById('save-question-settings');
+  if (saveQuestionSettingsBtn) {
+    saveQuestionSettingsBtn.addEventListener('click', saveQuestionSettings);
+  }
 }
 
 function loadAllSettings() {
-  chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'proposalMode', 'promptTemplate'], function(result) {
+  chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'proposalMode', 'promptTemplate', 'autoAnswerQuestions'], function(result) {
     console.log('Loading settings:', result);
     
     // Your name
@@ -77,6 +88,9 @@ function loadAllSettings() {
 
     // Load AI Prompts settings
     loadAIPromptsSettings();
+    
+    // Load Question Settings
+    loadQuestionSettings();
     loadMetaPromptForSelected();
     
     // Activate tab by saved mode (custom uses proposal prompt; ai uses AI Prompts tab)
@@ -415,6 +429,30 @@ function saveCustomAIPrompt() {
       console.error('Error saving custom AI prompt:', chrome.runtime.lastError);
     } else {
       console.log('Custom AI prompt saved successfully');
+    }
+  });
+}
+
+// Question Settings Functions
+function loadQuestionSettings() {
+  chrome.storage.local.get(['autoAnswerQuestions'], function(result) {
+    const autoAnswerQuestionsCheckbox = document.getElementById('auto-answer-questions');
+    if (autoAnswerQuestionsCheckbox) {
+      // Default to false (disabled) if not set
+      autoAnswerQuestionsCheckbox.checked = result.autoAnswerQuestions === true;
+    }
+  });
+}
+
+function saveQuestionSettings() {
+  const autoAnswerQuestionsCheckbox = document.getElementById('auto-answer-questions');
+  const autoAnswerQuestions = autoAnswerQuestionsCheckbox ? autoAnswerQuestionsCheckbox.checked : false;
+  
+  chrome.storage.local.set({ autoAnswerQuestions }, function() {
+    if (chrome.runtime.lastError) {
+      showStatusMessage('Error saving question settings: ' + chrome.runtime.lastError.message, 'error');
+    } else {
+      showStatusMessage('Question settings saved successfully!', 'success');
     }
   });
 }

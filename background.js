@@ -211,6 +211,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ success: true, usage: userUsage });
     return true;
   }
+  
+  if (request.action === 'generateQuestionAnswers') {
+    // Check usage limits before generating
+    checkUsageLimits()
+      .then(canGenerate => {
+        if (!canGenerate) {
+          console.log('Usage limit reached for user');
+          sendResponse({ 
+            success: false, 
+            error: 'Usage limit reached', 
+            limitReached: true,
+            usage: userUsage 
+          });
+          return;
+        }
+        
+        // Generate question answers
+        generateQuestionAnswers(request.questions, request.jobTitle, request.jobDescription)
+          .then(answers => {
+            // Track usage after successful generation
+            trackUsage();
+            console.log('Question answers generated successfully');
+            sendResponse({ success: true, answers, usage: userUsage });
+          })
+          .catch(error => {
+            console.error('Error generating question answers:', error);
+            sendResponse({ success: false, error: error.message });
+          });
+      })
+      .catch(error => {
+        console.error('Error checking usage limits:', error);
+        sendResponse({ success: false, error: 'Failed to check usage limits' });
+      });
+    return true; // Keep message channel open for async response
+  }
 
   if (request.action === 'resetUsage') {
     const reset = { proposalsUsed: 0, subscriptionStatus: 'free', subscriptionExpiry: null, userId: null };
@@ -651,4 +686,184 @@ async function generateWithOpenAI({ apiKey, model, temperature, jobTitle, jobDes
     throw new Error('Empty response from OpenAI');
   }
   return content.trim();
+}
+
+// Function to generate answers for additional questions
+async function generateQuestionAnswers(questions, jobTitle, jobDescription) {
+  try {
+    // Load user settings
+    const settings = await chrome.storage.local.get(['yourName', 'openaiApiKey', 'openaiModel', 'openaiTemperature']);
+    
+    // Create a prompt for all questions
+    const questionsText = questions.map((q, index) => `${index + 1}. ${q.label} (${q.type === 'textarea' ? 'Long answer' : 'Short answer'})`).join('\n');
+    
+    const systemMessage = `You are an expert Upwork freelancer with extensive technical knowledge. Answer application questions professionally, specifically, and technically based on the job requirements. Provide detailed, accurate technical answers that demonstrate expertise.`;
+    
+    const userMessage = `Based on this Upwork job, provide professional and technical answers to these application questions:
+
+JOB TITLE: ${jobTitle}
+JOB DESCRIPTION: ${jobDescription}
+
+QUESTIONS TO ANSWER:
+${questionsText}
+
+INSTRUCTIONS:
+- Answer each question with specific technical details and expertise
+- Show deep knowledge of the technologies mentioned
+- Provide practical examples and solutions
+- Be professional but demonstrate technical competence
+- For technical questions: Give detailed, accurate answers
+- For experience questions: Show relevant expertise
+- For approach questions: Explain your methodology
+- Use the freelancer name: ${settings.yourName || 'Your Name'}
+
+IMPORTANT: Answer each question completely and technically. Do not give generic responses like "I have experience in this area." Instead, provide specific, detailed technical answers that showcase your expertise.
+
+Provide answers in the same order as the questions, one per line, separated by "---ANSWER---".`;
+
+    // Try OpenAI first if API key is available
+    if (settings.openaiApiKey && settings.openaiApiKey.trim()) {
+      console.log('Using ChatGPT for question answers...');
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${settings.openaiApiKey.trim()}`
+          },
+          body: JSON.stringify({
+            model: (settings.openaiModel && settings.openaiModel.trim()) || DEFAULT_CONFIG.DEFAULT_MODEL,
+            messages: [
+              { role: 'system', content: systemMessage },
+              { role: 'user', content: userMessage }
+            ],
+            temperature: typeof settings.openaiTemperature === 'number' ? settings.openaiTemperature : DEFAULT_CONFIG.TEMPERATURE,
+            max_tokens: 2000 // Increased token limit for better answers
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const content = data?.choices?.[0]?.message?.content;
+          if (content && content.trim().length > 0) {
+            console.log('ChatGPT question answers generated successfully');
+            console.log('ChatGPT response:', content);
+            return parseQuestionAnswers(content, questions.length);
+          } else {
+            console.warn('ChatGPT returned empty content');
+          }
+        } else {
+          console.warn('ChatGPT API error:', response.status, response.statusText);
+          const errorData = await response.text();
+          console.warn('ChatGPT error details:', errorData);
+        }
+      } catch (error) {
+        console.warn('ChatGPT generation failed:', error);
+      }
+    } else {
+      console.warn('No ChatGPT API key found, using fallback');
+      console.log('To use ChatGPT for question answers, please set your OpenAI API key in the extension settings.');
+    }
+    
+    // Fallback to backend API
+    try {
+      const response = await fetch(`${DEFAULT_CONFIG.API_BASE_URL}/generate-question-answers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userUsage.userId || 'anonymous'}`
+        },
+        body: JSON.stringify({
+          questions: questions,
+          jobTitle: jobTitle,
+          jobDescription: jobDescription,
+          userId: userUsage.userId,
+          subscriptionStatus: userUsage.subscriptionStatus
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.answers) {
+          return data.answers;
+        }
+      }
+    } catch (error) {
+      console.warn('Backend API failed, using local generation:', error);
+    }
+    
+    // Local fallback - generate basic answers
+    return generateLocalQuestionAnswers(questions, jobTitle, jobDescription, settings);
+    
+  } catch (error) {
+    console.error('Error generating question answers:', error);
+    const settings = await chrome.storage.local.get(['yourName']);
+    return generateLocalQuestionAnswers(questions, jobTitle, jobDescription, settings);
+  }
+}
+
+// Parse answers from OpenAI response
+function parseQuestionAnswers(content, expectedCount) {
+  console.log('Parsing ChatGPT response:', content);
+  
+  // Try different separators that ChatGPT might use
+  let answers = [];
+  
+  if (content.includes('---ANSWER---')) {
+    answers = content.split('---ANSWER---').map(answer => answer.trim()).filter(answer => answer.length > 0);
+  } else if (content.includes('ANSWER:')) {
+    answers = content.split('ANSWER:').map(answer => answer.trim()).filter(answer => answer.length > 0);
+  } else if (content.includes('\n\n')) {
+    // Try splitting by double newlines
+    answers = content.split('\n\n').map(answer => answer.trim()).filter(answer => answer.length > 0);
+  } else {
+    // Fallback: split by numbered items
+    const lines = content.split('\n').filter(line => line.trim().length > 0);
+    answers = lines.filter(line => /^\d+\./.test(line.trim())).map(line => line.replace(/^\d+\.\s*/, '').trim());
+  }
+  
+  console.log('Parsed answers:', answers);
+  
+  // Ensure we have the right number of answers
+  while (answers.length < expectedCount) {
+    answers.push('I have relevant experience in this area and can help with this project.');
+  }
+  
+  return answers.slice(0, expectedCount);
+}
+
+// Generate basic answers locally as fallback
+function generateLocalQuestionAnswers(questions, jobTitle, jobDescription, settings) {
+  const answers = [];
+  const freelancerName = settings.yourName || 'Your Name';
+  
+  questions.forEach(question => {
+    const label = question.label.toLowerCase();
+    
+    // WordPress/Web Development specific answers
+    if (label.includes('wordpress') || label.includes('custom post type') || label.includes('cpt') || label.includes('real estate')) {
+      answers.push(`For WordPress real estate listings, I would create a Custom Post Type called 'Property' with custom fields like 'price', 'bedrooms', 'bathrooms', 'square_feet', 'address', and 'property_images'. I'd use taxonomies like 'property_type' (house, condo, apartment) and 'location' (city, neighborhood). This structure allows for easy filtering, searching, and management of listings.`);
+    } else if (label.includes('container queries') || label.includes('css') || label.includes('responsive') || label.includes('components')) {
+      answers.push(`Container Queries solve the problem of component-based responsive design by allowing elements to respond to their container's size rather than just the viewport. This is a game-changer because it enables truly reusable components that adapt to their context, making design systems more flexible and maintainable.`);
+    } else if (label.includes('experience') || label.includes('background')) {
+      answers.push(`I have extensive experience in ${extractFieldFromDescription(jobDescription)} and have successfully completed similar projects. I'm confident I can deliver excellent results for this ${jobTitle} project.`);
+    } else if (label.includes('approach') || label.includes('method')) {
+      answers.push(`My approach involves understanding your specific requirements, creating a detailed plan, and implementing the solution with regular updates and communication throughout the project.`);
+    } else if (label.includes('timeline') || label.includes('schedule') || label.includes('when')) {
+      answers.push(`I can start immediately and typically complete similar projects within 1-2 weeks, depending on the specific requirements. I'll provide a detailed timeline once I understand the full scope.`);
+    } else if (label.includes('portfolio') || label.includes('examples') || label.includes('work')) {
+      answers.push(`I have a strong portfolio of similar projects and can provide examples upon request. My previous work demonstrates my expertise in this area.`);
+    } else if (label.includes('why') || label.includes('choose') || label.includes('hire')) {
+      answers.push(`I'm the right fit for this project because of my relevant experience, attention to detail, and commitment to delivering high-quality work on time. I'm dedicated to your success.`);
+    } else if (label.includes('budget') || label.includes('cost') || label.includes('price')) {
+      answers.push(`I'm happy to discuss the budget based on the specific requirements. I offer competitive rates and excellent value for the quality of work provided.`);
+    } else if (label.includes('communication') || label.includes('contact') || label.includes('update')) {
+      answers.push(`I maintain clear and regular communication throughout the project, providing updates on progress and being available to answer questions promptly.`);
+    } else {
+      // Generic answer for any other question
+      answers.push(`I have relevant experience and skills for this ${jobTitle} project. I'm confident I can help you achieve your goals and deliver excellent results.`);
+    }
+  });
+  
+  return answers;
 }
