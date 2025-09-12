@@ -495,8 +495,8 @@
     
     <div class="tabs">
       <button class="tab active" data-tab="profile">👤 Profile</button>
-      <button class="tab" data-tab="custom-instructions">🎯 Proposal Prompt</button>
-      <button class="tab" data-tab="ai-proposal">📝 AI Proposal</button>
+      <button class="tab" data-tab="custom-instructions">🎯 Custom Proposal</button>
+      <button class="tab" data-tab="ai-prompts">🚀 AI Prompts</button>
     </div>
     
     <!-- Profile Tab -->
@@ -558,37 +558,60 @@ Best regards,
     
     
 
-    <!-- AI Proposal Tab -->
-    <div id="ai-proposal" class="tab-content">
+
+    <!-- AI Prompts Tab -->
+    <div id="ai-prompts" class="tab-content">
       <div class="settings-grid">
         <div class="settings-card" style="grid-column: 1 / -1;">
-          <h3 class="card-title">📝 Generate AI Proposal</h3>
+          <h3 class="card-title">🚀 AI Proposal Prompts</h3>
+          <p style="margin-bottom: 25px; color: #4a5568; font-size: 16px; line-height: 1.6;">
+            Use these optimized AI prompts to generate high-converting Upwork proposals. Each template follows proven rules for maximum impact.
+          </p>
+          
           <div class="form-group">
-            <label class="form-label" for="ai-custom-prompt">AI Prompt (used when AI Proposal is selected)</label>
-            <textarea id="ai-custom-prompt" class="form-textarea" rows="10" placeholder="Always start with &quot;I have 8+ years of experience&quot;
-Keep it under 5 lines
-Include a 3-step process
-Add 2-3 specific KPIs
-End with a clarifying question
-Tie deliverables to business outcomes (revenue, signups).
-Use industry-specific terminology
-Mention relevant tools (GSC, GA4, Screaming Frog, etc.)
-Choose the one that best matches the job description, or combine elements from different prompts to create your own!">Always start with "I have 8+ years of experience"
-Keep it under 5 lines
-Include a 3-step process
-Add 2-3 specific KPIs
-End with a clarifying question
-Tie deliverables to business outcomes (revenue, signups).
-Use industry-specific terminology
-Mention relevant tools (GSC, GA4, Screaming Frog, etc.)
-Choose the one that best matches the job description, or combine elements from different prompts to create your own!</textarea>
-            <div class="form-help">Tip: set temperature to 0.3–0.5 for stricter adherence. Save to persist your prompt.</div>
+            <label class="form-label" for="prompt-template">Template Type</label>
+            <select id="prompt-template" class="form-input">
+              <option value="universal">Universal (works for any job)</option>
+              <option value="software">Software/Apps Development</option>
+              <option value="marketing">Marketing/SEO</option>
+              <option value="design">Design/UX</option>
+              <option value="data">Data/Analytics</option>
+              <option value="custom">Custom Prompt</option>
+            </select>
+            <div class="form-help">Choose the template that best matches your target jobs</div>
           </div>
-          <div class="form-group">
-            <button class="btn btn-primary" id="save-ai-prompt">💾 Save</button>
+
+          <div class="form-group" id="meta-prompt-editor-section">
+            <label class="form-label" for="meta-prompt-editor">Meta Prompt (advanced)</label>
+            <textarea id="meta-prompt-editor" class="form-textarea" rows="8" placeholder="Edit the Meta Prompt for the selected template..."></textarea>
+            <div class="form-help">This controls the rules the AI follows for this template. Overrides are saved per template.</div>
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+              <button class="btn btn-primary" id="save-meta-prompt">💾 Save Meta Prompt</button>
+              <button class="btn btn-secondary" id="reset-meta-prompt">🔄 Reset to Default</button>
+            </div>
           </div>
+
+
+          <div id="template-preview" class="template-preview" style="display: none;">
+            <h4>Template Preview:</h4>
+            <div id="template-content"></div>
+          </div>
+
+          <div id="custom-prompt-section" class="form-group" style="display: none;">
+            <label class="form-label" for="custom-ai-prompt">Custom AI Prompt</label>
+            <textarea id="custom-ai-prompt" class="form-textarea" rows="15" placeholder="Enter your custom AI prompt here..."></textarea>
+            <div class="form-help">
+              <strong>💡 Tips for custom prompts:</strong><br>
+              • Start with "I have 8+ years of experience"<br>
+              • Keep it under 8 lines<br>
+              • Include 2 steps and 2-3 KPIs<br>
+              • End with one clarifying question<br>
+              • Use industry-specific terminology
+            </div>
+          </div>
+
           <div class="form-group">
-            <div id="ai-proposal-result" class="template-preview" style="display:none;"></div>
+            <button class="btn btn-secondary" id="preview-template">👁️ Preview Template</button>
           </div>
         </div>
       </div>

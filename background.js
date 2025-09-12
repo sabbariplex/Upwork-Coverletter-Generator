@@ -55,7 +55,107 @@ function generateCustomPrompt(jobTitle, jobDescription, settings) {
   return customPrompt;
 }
 
-// Default prompt template
+// AI Proposal Prompts Templates
+const AI_PROMPTS_TEMPLATES = {
+  universal: {
+    metaPrompt: `Generate an Upwork proposal. Follow ALL rules:
+- Start with: "I have 8+ years of experience—[mirror client need in plain English]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools (swap per job: GSC, GA4, Screaming Frog, Git, Docker, Figma, etc.).
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.
+- Prefer verbs and outcomes over adjectives. Use industry terminology.`,
+    template: `I have 8+ years of experience—you need [plain-English restatement].  
+Step 1: [audit/plan/prototype] → deliver [artifact] in [X days].  
+Step 2: [implement/test/iterate] → ship with docs and handoff.  
+KPIs: [metric 1], [metric 2], [metric 3] by [date].  
+Tools: [role-specific tools].  
+Tiny plan: [one sentence on sequence/milestones]. Next step: I'm available [times, TZ].  
+Question: [one precise clarifying question]?`
+  },
+  software: {
+    metaPrompt: `Generate an Upwork proposal for software development. Follow ALL rules:
+- Start with: "I have 8+ years of experience—you need [feature/app/integration] that [does X]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools: Git, GitHub Actions, Docker, AWS/GCP, Postman, Jira.
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.`,
+    template: `I have 8+ years of experience—you need [feature/app/integration] that [does X].  
+Step 1: Define scope, API/DB schema, and tests.  
+Step 2: Build, CI/CD, staging review, handoff.  
+KPIs: lead time <[X] days, error rate <[Y]%, perf +[Z]%.  
+Tools: Git, GitHub Actions, Docker, AWS/GCP, Postman.  
+Tiny plan: weekly demo, PR reviews. I can start [date/TZ].  
+Question: Any non-functional constraints I must meet first?`
+  },
+  marketing: {
+    metaPrompt: `Generate an Upwork proposal for marketing/SEO. Follow ALL rules:
+- Start with: "I have 8+ years of experience—you need growth in [traffic/conversions] from [channels/pages]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools: GSC, GA4, Screaming Frog, Ahrefs/Semrush, Looker Studio.
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.`,
+    template: `I have 8+ years of experience—you need growth in [traffic/conversions] from [channels/pages].  
+Step 1: Technical and content audit with quick wins.  
+Step 2: Implement fixes, on-page updates, and tracking.  
+KPIs: +[X]% clicks, +[Y]% CVR, LCP <[Z]s in [N] weeks.  
+Tools: GSC, GA4, Screaming Frog, Ahrefs/Semrush, Looker Studio.  
+Tiny plan: prioritize by impact/effort; weekly report. I'm available [times].  
+Question: Which pages drive the highest-margin conversions today?`
+  },
+  design: {
+    metaPrompt: `Generate an Upwork proposal for design/UX. Follow ALL rules:
+- Start with: "I have 8+ years of experience—you need a [UI/UX/brand] that solves [use case]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools: Figma, FigJam, Adobe CC, WCAG, Zeplin.
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.`,
+    template: `I have 8+ years of experience—you need a [UI/UX/brand] that solves [use case].  
+Step 1: Wireframes and component inventory.  
+Step 2: High-fidelity design and dev-ready specs.  
+KPIs: task success +[X]%, time-on-task −[Y]%, NPS +[Z].  
+Tools: Figma, FigJam, Adobe CC, WCAG, Zeplin.  
+Tiny plan: tokens, variants, handoff notes. I can start [date].  
+Question: What top 3 user tasks should we optimize first?`
+  },
+  data: {
+    metaPrompt: `Generate an Upwork proposal for data/analytics. Follow ALL rules:
+- Start with: "I have 8+ years of experience—you need [dashboard/model/pipeline] for [business question]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools: SQL, Python, dbt, BigQuery/Snowflake, GA4, Looker Studio.
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.`,
+    template: `I have 8+ years of experience—you need [dashboard/model/pipeline] for [business question].  
+Step 1: Data audit, schema mapping, and validation rules.  
+Step 2: Build models, QA, and stakeholder-ready dashboards.  
+KPIs: data freshness <[X] hrs, accuracy >[Y]%, time-to-insight −[Z]%.  
+Tools: SQL, Python, dbt, BigQuery/Snowflake, GA4, Looker Studio.  
+Tiny plan: versioned models, tests, docs. I'm free [times].  
+Question: Which decisions will this dashboard support weekly?`
+  },
+  custom: {
+    metaPrompt: `Generate an Upwork proposal. Follow ALL rules:
+1. Always start with "I have experience in" and then write whatever the client needs from job post title or job details
+2. Make proposal 5-15 lines max
+- Use industry-specific terminology and relevant tools
+- Include specific skills and approach
+- End with a clarifying question
+- Avoid generic phrases like "I'm excited," "aligns perfectly," "best regards"
+- Keep sentences short and concrete`,
+    template: `I have experience in [specific skills from job title/details].  
+[Brief approach or process - 2-3 lines]
+[Specific outcomes or deliverables - 1-2 lines]
+[Relevant tools and technologies - 1 line]
+[One clarifying question about the project]`
+  }
+};
+
+// Default prompt template (fallback)
 function getDefaultPrompt() {
   return `I have extensive experience in web development and I'm excited about this project.
 
@@ -361,13 +461,46 @@ async function generateCoverLetter(jobTitle, jobDescription) {
     await loadUserUsage();
     
     // Get user settings from storage
-    const settings = await chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'openaiApiKey', 'openaiModel', 'openaiTemperature', 'proposalMode', 'aiCustomPrompt']);
+    const settings = await chrome.storage.local.get(['customPrompt', 'yourName', 'quickSettings', 'openaiApiKey', 'openaiModel', 'openaiTemperature', 'proposalMode', 'aiPromptsEnabled', 'promptTemplate', 'customAIPrompt']);
     
     // Decide which prompt to use depending on mode
     const isAIMode = (settings.proposalMode || 'ai') === 'ai';
-    const prompt = isAIMode && settings.aiCustomPrompt && settings.aiCustomPrompt.trim().length > 0
-      ? settings.aiCustomPrompt.trim().replace(/\[Your Name\]/g, settings.yourName || 'Your Name')
-      : generateCustomPrompt(jobTitle, jobDescription, settings);
+    let prompt;
+    
+    // Check if AI prompts are enabled
+    if (settings.aiPromptsEnabled !== false && isAIMode) {
+      const templateType = settings.promptTemplate || 'universal';
+      
+      if (templateType === 'custom' && settings.customAIPrompt && settings.customAIPrompt.trim()) {
+        // Use custom AI prompt
+        prompt = settings.customAIPrompt.trim().replace(/\[Your Name\]/g, settings.yourName || 'Your Name');
+      } else if (AI_PROMPTS_TEMPLATES[templateType]) {
+        // Use AI prompts template
+        const template = AI_PROMPTS_TEMPLATES[templateType];
+        // Load per-template meta override from storage
+        const overrideKey = `metaPromptOverride_${templateType}`;
+        const stored = await chrome.storage.local.get([overrideKey]);
+        const metaPrompt = (stored && stored[overrideKey]) ? stored[overrideKey] : template.metaPrompt;
+        const templateText = template.template;
+        
+        // Create the full prompt with job context
+        prompt = `${metaPrompt}
+
+Job Title: ${jobTitle}
+Job Description: ${jobDescription}
+
+Generate a proposal using this template:
+${templateText}
+
+Replace placeholders with specific details from the job. Keep it under 8 lines.`;
+      } else {
+        // Fallback to default
+        prompt = generateCustomPrompt(jobTitle, jobDescription, settings);
+      }
+    } else {
+      // Use custom prompt mode
+      prompt = generateCustomPrompt(jobTitle, jobDescription, settings);
+    }
 
     // Validate inputs
     if (!jobTitle || !jobDescription) {
@@ -378,9 +511,9 @@ async function generateCoverLetter(jobTitle, jobDescription) {
     const cleanJobTitle = jobTitle.toString().trim();
     const cleanJobDescription = jobDescription.toString().trim();
     
-    // Truncate job description to avoid token limit (keep first 2000 characters)
-    const truncatedJobDescription = cleanJobDescription.length > 2000 
-      ? cleanJobDescription.substring(0, 2000) + '...' 
+    // Truncate job description to avoid token limit (allow more context now)
+    const truncatedJobDescription = cleanJobDescription.length > 4000 
+      ? cleanJobDescription.substring(0, 4000) + '...' 
       : cleanJobDescription;
     
     // If AI mode and API key exists, try OpenAI first
@@ -476,45 +609,22 @@ async function generateCoverLetter(jobTitle, jobDescription) {
 
 I usually focus on getting things done right the first time and keeping you updated along the way. I'm pretty flexible with timelines and can start whenever you need me.
 
-What's the most important part of this project for you? And do you prefer to chat through Upwork messages or would you rather hop on a quick call to discuss details?
-
-Looking forward to working with you!
-
-Best regards,
-${signatureName}`;
+`;
   }
 }
 
-// Handle extension installation (moved to top of file)
-
-// Handle tab updates to inject content script
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url && tab.url.includes('upwork.com')) {
-    // Inject content script if not already injected
-    chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      files: ['content.js']
-    }).catch(error => {
-      console.log('Content script already injected or error:', error);
-    });
-  }
-});
-
-// Handle extension icon click
-chrome.action.onClicked.addListener((tab) => {
-  if (tab.url && tab.url.includes('upwork.com')) {
-    // Open popup or show options
-    chrome.action.openPopup();
-  } else {
-    // Show message to navigate to Upwork
-    chrome.tabs.create({ url: 'https://www.upwork.com' });
-  }
-});
-
-// Generate proposal via OpenAI Chat Completions
 async function generateWithOpenAI({ apiKey, model, temperature, jobTitle, jobDescription, customPrompt, yourName }) {
-  const systemMessage = 'You are an expert Upwork freelancer. You write proposals that are SPECIFIC to the job description, concise (180-260 words), professional, and outcome-focused. You always mirror the client\'s terminology, mention 3-5 concrete matching requirements/skills pulled from the job description, and state a brief plan. No fluff, no generic claims.';
-  const userMessage = `Write a tailored Upwork proposal for this job.\n\nJOB TITLE:\n${jobTitle}\n\nJOB DESCRIPTION (analyze and extract key requirements/skills/stack):\n${jobDescription}\n\nSTYLE GUIDANCE (optional, only use if it improves the proposal):\n${customPrompt || '(no custom style provided)'}\n\nSTRICT REQUIREMENTS:\n- Start with 1-2 lines that reflect the client\'s goal in their own words.\n- Include 3-5 bullet points mapping my experience to SPECIFIC requirements/keywords from the description (quote short phrases when relevant).\n- Add a short plan (3-4 steps) for how I will approach the project.\n- Ask 1-2 clarifying questions that matter to delivery.\n- Keep it under 260 words.\n- Sign off as ${yourName}.`;
+  // Optional guidance based on keywords
+  const lower = jobDescription.toLowerCase();
+  const extraGuidance = [];
+  if (/(wordpress|elementor)/.test(lower)) {
+    extraGuidance.push('If relevant, include 1 short line with 2–3 portfolio links (placeholders allowed).');
+  }
+  const optionalGuidance = extraGuidance.length ? `\n- ${extraGuidance.join('\n- ')}` : '';
+
+  const systemMessage = 'You are an expert Upwork freelancer. Write proposals that are specific to the job description, professional, outcome-focused, and easy to skim. Prefer a short narrative intro, bullets mapping experience to requirements, a brief plan, and 1–2 clarifying questions. Avoid fluff and generic claims.';
+  const userMessage = `Write a tailored Upwork proposal for this job.\n\nJOB TITLE:\n${jobTitle}\n\nJOB DESCRIPTION:\n${jobDescription}\n\nSTYLE/TONE (optional):\n${customPrompt || '(no custom style provided)'}\n\nREQUIREMENTS:\n- Start with a concise 1–2 sentence narrative that mirrors the client goal/phrases.\n- Include 3–5 bullets mapping my experience to SPECIFIC requirements/keywords from the description. Quote short phrases if helpful.\n- Add a short plan (3–4 steps) for how I will deliver.\n- Ask 1–2 clarifying questions that matter to delivery.\n- Length: 220–340 words.\n- Sign off as ${yourName}.${optionalGuidance}`;
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -536,7 +646,9 @@ async function generateWithOpenAI({ apiKey, model, temperature, jobTitle, jobDes
     throw new Error(`OpenAI API error: ${response.status} ${err}`);
   }
   const data = await response.json();
-  const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-  if (!content) throw new Error('OpenAI returned no content');
-  return content.replace(/\[Your Name\]/g, yourName);
+  const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content ? data.choices[0].message.content : '';
+  if (!content) {
+    throw new Error('Empty response from OpenAI');
+  }
+  return content.trim();
 }

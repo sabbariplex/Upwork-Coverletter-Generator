@@ -175,6 +175,7 @@ document.addEventListener('DOMContentLoaded', function() {
     chrome.tabs.create({ url: chrome.runtime.getURL('subscription.html') });
   }
   
+  
   // Function to show notification
   function showNotification(message) {
     // Create notification element
