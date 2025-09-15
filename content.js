@@ -877,18 +877,47 @@ function fillQuestionFields(questions, answers) {
           return;
         }
         
-        // Check if field already has content (might be cover letter)
+        // Check if field already has long content (likely cover letter)
         if (element.value && element.value.trim().length > 50) {
           console.log(`Skipping field with existing content (likely cover letter): "${element.value.substring(0, 50)}..."`);
           return;
         }
         
         try {
-          element.focus();
-          element.value = answers[index];
+          const answerText = answers[index];
+          const labelText = (question.label || '').trim();
+
+          // If the field currently contains the label text, clear it first
+          if (element.value && element.value.trim() === labelText) {
+            element.value = '';
+          }
+
+          // Set the answer WITHOUT focusing first to avoid onfocus injections
+          element.value = answerText;
           element.dispatchEvent(new Event('input', { bubbles: true }));
           element.dispatchEvent(new Event('change', { bubbles: true }));
-          element.dispatchEvent(new Event('blur', { bubbles: true }));
+
+          // Re-assert the value shortly after in case the site overwrites it
+          setTimeout(() => {
+            if (element.value.trim() !== answerText.trim()) {
+              element.value = answerText;
+              element.dispatchEvent(new Event('input', { bubbles: true }));
+              element.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }, 250);
+
+          setTimeout(() => {
+            if (element.value.trim() !== answerText.trim()) {
+              element.value = answerText;
+              element.dispatchEvent(new Event('input', { bubbles: true }));
+              element.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }, 700);
+
+          // Do not call focus() to prevent site from inserting the question text on focus
+          // element.focus();
+          // element.dispatchEvent(new Event('blur', { bubbles: true }));
+
           filledCount++;
           console.log(`Filled question ${index + 1}: "${question.label}"`);
         } catch (error) {

@@ -657,8 +657,29 @@ async function generateWithOpenAI({ apiKey, model, temperature, jobTitle, jobDes
   }
   const optionalGuidance = extraGuidance.length ? `\n- ${extraGuidance.join('\n- ')}` : '';
 
-  const systemMessage = 'You are an expert Upwork freelancer. Write proposals that are specific to the job description, professional, outcome-focused, and easy to skim. Prefer a short narrative intro, bullets mapping experience to requirements, a brief plan, and 1–2 clarifying questions. Avoid fluff and generic claims.';
-  const userMessage = `Write a tailored Upwork proposal for this job.\n\nJOB TITLE:\n${jobTitle}\n\nJOB DESCRIPTION:\n${jobDescription}\n\nSTYLE/TONE (optional):\n${customPrompt || '(no custom style provided)'}\n\nREQUIREMENTS:\n- Start with a concise 1–2 sentence narrative that mirrors the client goal/phrases.\n- Include 3–5 bullets mapping my experience to SPECIFIC requirements/keywords from the description. Quote short phrases if helpful.\n- Add a short plan (3–4 steps) for how I will deliver.\n- Ask 1–2 clarifying questions that matter to delivery.\n- Length: 220–340 words.\n- Sign off as ${yourName}.${optionalGuidance}`;
+  const systemMessage = 'You are an expert Upwork freelancer. Write proposals that are strictly tailored to the provided job description. Your proposal must reflect the client\'s language, mirror their goals, and map experience directly to the stated requirements and keywords. Avoid generic claims or boilerplate. Keep it professional, outcome-focused, and easy to skim.';
+  const userMessage = `Write a tailored Upwork proposal for this job. Use the client's own wording where appropriate.
+
+JOB TITLE:
+${jobTitle}
+
+JOB DESCRIPTION (verbatim):
+${jobDescription}
+
+STYLE/TONE (optional):
+${customPrompt || '(no custom style provided)'}
+
+STRICT REQUIREMENTS:
+- Open with 1–2 sentences that restate the client goal using their phrasing.
+- Include 3–5 bullets that map MY experience to SPECIFIC requirements/keywords from the job description.
+  • In each bullet, QUOTE 1 short phrase from the description in double quotes ("") and explain how I address it.
+- Add a brief 3–4 step plan referencing the client context and constraints contained in the description.
+- Ask 1–2 focused clarifying questions that would affect scope/timeline.
+- Do NOT include KPIs/metrics or promise specific numbers unless the job description explicitly requests KPIs/metrics.
+- Length: 220–340 words total.
+- Sign off as ${yourName}.
+- Absolutely NO generic filler (e.g., "I have relevant experience" without specifics).
+${optionalGuidance}`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -806,29 +827,102 @@ Provide answers in the same order as the questions, one per line, separated by "
 function parseQuestionAnswers(content, expectedCount) {
   console.log('Parsing ChatGPT response:', content);
   
-  // Try different separators that ChatGPT might use
   let answers = [];
   
+  // Try different parsing methods based on the response format
   if (content.includes('---ANSWER---')) {
+    // Method 1: Split by ---ANSWER--- separator
     answers = content.split('---ANSWER---').map(answer => answer.trim()).filter(answer => answer.length > 0);
-  } else if (content.includes('ANSWER:')) {
-    answers = content.split('ANSWER:').map(answer => answer.trim()).filter(answer => answer.length > 0);
+  } else if (content.includes('Anwser:') || content.includes('Answer:')) {
+    // Method 2: Split by "Answer:" or "Anwser:" (common typo)
+    const answerPattern = /(?:Anwser|Answer):\s*(.*?)(?=(?:Anwser|Answer):|$)/gs;
+    const matches = content.match(answerPattern);
+    if (matches) {
+      answers = matches.map(match => match.replace(/(?:Anwser|Answer):\s*/i, '').trim()).filter(answer => answer.length > 0);
+    }
+  } else if (content.includes('Question:') && (content.includes('Anwser:') || content.includes('Answer:'))) {
+    // Method 3: Extract answers from Q&A format
+    console.log('Using Q&A format parsing...');
+    const lines = content.split('\n');
+    console.log('Total lines:', lines.length);
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      console.log(`Line ${i}:`, line);
+      
+      if (line.includes('Anwser:') || line.includes('Answer:')) {
+        let answer = line.replace(/(?:Anwser|Answer):\s*/i, '').trim();
+        console.log(`Found answer line ${i}, initial answer:`, answer);
+        
+        // If answer is short or contains "---", check next lines
+        if (answer.length < 50 || answer.includes('---')) {
+          let j = i + 1;
+          while (j < lines.length && !lines[j].includes('Question:') && !lines[j].includes('Anwser:') && !lines[j].includes('Answer:')) {
+            const nextLine = lines[j].trim();
+            if (nextLine.length > 0 && !nextLine.includes('---')) {
+              answer += ' ' + nextLine;
+            }
+            j++;
+          }
+        }
+        
+        // Clean up the answer
+        answer = answer.replace(/---/g, '').trim();
+        
+        if (answer.length > 0) {
+          console.log(`Final answer ${answers.length + 1}:`, answer);
+          answers.push(answer);
+        }
+      }
+    }
   } else if (content.includes('\n\n')) {
-    // Try splitting by double newlines
+    // Method 4: Split by double newlines
     answers = content.split('\n\n').map(answer => answer.trim()).filter(answer => answer.length > 0);
   } else {
-    // Fallback: split by numbered items
+    // Method 5: Split by numbered items
     const lines = content.split('\n').filter(line => line.trim().length > 0);
     answers = lines.filter(line => /^\d+\./.test(line.trim())).map(line => line.replace(/^\d+\.\s*/, '').trim());
   }
   
-  console.log('Parsed answers:', answers);
+  // Clean up answers by removing numbering and extra formatting
+  answers = answers.map(answer => {
+    // Remove leading numbers like "1.", "2.", etc.
+    answer = answer.replace(/^\d+\.\s*/, '');
+    
+    // Remove any remaining numbering patterns
+    answer = answer.replace(/^\(\d+\)\s*/, '');
+    answer = answer.replace(/^Answer\s*\d*:?\s*/i, '');
+    answer = answer.replace(/^Q\d*:?\s*/i, '');
+    answer = answer.replace(/^Anwser\s*\d*:?\s*/i, '');
+    
+    // Clean up extra whitespace
+    answer = answer.trim();
+    
+    return answer;
+  }).filter(answer => answer.length > 0);
+  
+  console.log('Cleaned answers:', answers);
+  
+  // If we still don't have enough answers, try a more aggressive parsing approach
+  if (answers.length < expectedCount) {
+    console.log('Not enough answers found, trying aggressive parsing...');
+    
+    // Try to find any text that looks like answers, even without clear separators
+    const allText = content.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+    const sentences = allText.split(/[.!?]+/).filter(s => s.trim().length > 20);
+    
+    if (sentences.length >= expectedCount) {
+      console.log('Found sentences that could be answers:', sentences);
+      answers = sentences.slice(0, expectedCount);
+    }
+  }
   
   // Ensure we have the right number of answers
   while (answers.length < expectedCount) {
     answers.push('I have relevant experience in this area and can help with this project.');
   }
   
+  console.log('Final answers to return:', answers);
   return answers.slice(0, expectedCount);
 }
 
