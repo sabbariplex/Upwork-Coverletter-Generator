@@ -120,25 +120,44 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Get current tab
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      if (tabs[0] && tabs[0].url.includes('upwork.com')) {
-        // Send message to content script to generate cover letter
-        chrome.tabs.sendMessage(tabs[0].id, {action: 'generateCoverLetter'}, function(response) {
-          if (response && response.success) {
-            showNotification('Cover letter generated successfully!');
-            loadCurrentJob(); // Refresh job info
-            loadUsageInfo(); // Refresh usage info
-          } else if (response && response.limitReached) {
-            showNotification('Free limit reached! Upgrade to Premium for unlimited proposals.');
-            generateBtn.textContent = 'Upgrade to Generate';
-            generateBtn.style.background = 'linear-gradient(135deg, #f56565, #e53e3e)';
-          } else {
-            showNotification('Failed to generate cover letter. Please try again.');
-          }
-          
-          if (!response || !response.limitReached) {
+      const tab = tabs[0];
+      if (tab && tab.url && tab.url.includes('upwork.com')) {
+        // Ask content script to extract job data from the page
+        chrome.tabs.sendMessage(tab.id, { action: 'extractJobData' }, function(resp) {
+          if (!resp || !resp.success) {
+            showNotification('Could not read job data from the page. Open a job post and try again.');
             generateBtn.textContent = 'Generate Cover Letter';
             generateBtn.disabled = false;
+            return;
           }
+          // Ask background to generate the cover letter
+          chrome.runtime.sendMessage({ action: 'generateCoverLetter', jobTitle: resp.jobTitle, jobDescription: resp.jobDescription }, function(bgResp) {
+            if (bgResp && bgResp.limitReached) {
+              showNotification('Free limit reached! Upgrade to Premium for unlimited proposals.');
+              generateBtn.textContent = 'Upgrade to Generate';
+              generateBtn.style.background = 'linear-gradient(135deg, #f56565, #e53e3e)';
+              return;
+            }
+            if (bgResp && bgResp.success) {
+              showNotification('Cover letter generated successfully!');
+              // Save to storage so content can auto-fill or the popup can show
+              chrome.storage.local.set({
+                coverLetter: bgResp.coverLetter,
+                jobTitle: resp.jobTitle,
+                jobDescription: resp.jobDescription
+              }, function() {
+                // Try to fill on the page
+                chrome.tabs.sendMessage(tab.id, { action: 'fillCoverLetter', coverLetter: bgResp.coverLetter });
+              });
+              loadCurrentJob();
+              loadUsageInfo();
+            } else {
+              const errMsg = (bgResp && bgResp.error) || 'Failed to generate cover letter. Please try again.';
+              showNotification(errMsg);
+            }
+            generateBtn.textContent = 'Generate Cover Letter';
+            generateBtn.disabled = false;
+          });
         });
       } else {
         showNotification('Please navigate to an Upwork job posting first.');

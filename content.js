@@ -16,16 +16,56 @@ if (typeof window.__proposalGenerated === 'undefined') {
 if (typeof window.__proposalGenerationInProgress === 'undefined') {
   window.__proposalGenerationInProgress = false;
 }
+// Helper function to expand truncated descriptions
+function expandTruncatedDescription() {
+  const moreButton = document.querySelector('.air3-truncation-btn');
+  if (moreButton && moreButton.getAttribute('aria-expanded') === 'false') {
+    console.log('Expanding truncated description...');
+    moreButton.click();
+    return true;
+  }
+  return false;
+}
+
 // Function to extract job description from Upwork page
 function extractJobDescription() {
   try {
     console.log('Attempting to extract job description...');
+    
+    // First try to expand any truncated descriptions
+    expandTruncatedDescription();
     
   // Priority 1: .job-details-content .text-body-sm (most specific and accurate)
   const jobDetailsText = document.querySelector('.job-details-content .text-body-sm');
   if (jobDetailsText && jobDetailsText.textContent && jobDetailsText.textContent.trim().length > 10) {
     const text = jobDetailsText.textContent.trim();
     console.log('Found job description in .job-details-content .text-body-sm:', text.substring(0, 100) + '...');
+    return text;
+  }
+
+  // Priority 1.5: Handle truncated descriptions in new Upwork layout
+  const truncatedDesc = document.querySelector('.description .air3-truncation span span');
+  if (truncatedDesc && truncatedDesc.textContent && truncatedDesc.textContent.trim().length > 10) {
+    const text = truncatedDesc.textContent.trim();
+    console.log('Found truncated job description:', text.substring(0, 100) + '...');
+    
+    // Try to expand the description by clicking "more" button
+    const moreButton = document.querySelector('.air3-truncation-btn');
+    if (moreButton && text.includes('…')) {
+      console.log('Clicking "more" button to expand description...');
+      moreButton.click();
+      
+      // Wait a bit for the content to expand, then try again
+      setTimeout(() => {
+        const expandedDesc = document.querySelector('.description .air3-truncation span span');
+        if (expandedDesc && expandedDesc.textContent && expandedDesc.textContent.trim().length > text.length) {
+          const expandedText = expandedDesc.textContent.trim();
+          console.log('Found expanded job description:', expandedText.substring(0, 100) + '...');
+          return expandedText;
+        }
+      }, 500);
+    }
+    
     return text;
   }
 
@@ -49,7 +89,12 @@ function extractJobDescription() {
   const selectors = [
       // Upwork specific selectors (most accurate first)
       '.job-details-content .text-body-sm',
+      '.description .air3-truncation span span',
+      '.description',
       '[data-test="job-description"]',
+      '[data-test="job-description-text"]',
+      'section[data-test="job-description"]',
+      '.up-card-section[data-test="job-description"]',
       '[data-cy="job-description"]',
       '.job-description',
       '.job-description-text',
@@ -100,7 +145,7 @@ function extractJobDescription() {
     console.log('Trying fallback methods...');
     
     // First, try to find text that looks like a job description by keywords
-    const jobKeywords = ['looking for', 'need', 'require', 'project', 'work', 'experience', 'skills', 'CSS', 'Liquid', 'Shopify', 'jobs', 'efficient', 'communication'];
+    const jobKeywords = ['looking for', 'need', 'require', 'project', 'work', 'experience', 'skills', 'css', 'liquid', 'shopify', 'wordpress', 'react', 'api', 'deadline'];
     const allElements = document.querySelectorAll('div, section, article, p, span');
     
     for (const element of allElements) {
@@ -1006,6 +1051,11 @@ function modifyApplyButton() {
     
     // Add our custom click handler
     applyButton.addEventListener('click', async (e) => {
+      // Skip handling if this is a synthetic click triggered by our script
+      if (window.__uclgSyntheticClick) {
+        window.__uclgSyntheticClick = false;
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       
@@ -1070,6 +1120,8 @@ function modifyApplyButton() {
         if (originalClick) {
           originalClick.call(applyButton, e);
         } else {
+          // Trigger a synthetic click but skip our handler to avoid recursion
+          window.__uclgSyntheticClick = true;
           applyButton.click();
         }
       }, 500);
@@ -1228,24 +1280,18 @@ function cleanup() {
 async function generateAutoProposal() {
   console.log('Generating automatic proposal...');
   console.log('Current URL:', window.location.href);
-  if (window.__proposalGenerationInProgress) {
-    console.log('Proposal generation already in progress, skipping');
-    return;
-  }
   if (window.__proposalGenerated) {
     console.log('Proposal already generated, skipping');
     return;
   }
-  window.__proposalGenerationInProgress = true;
-
-  // Ensure dynamic content is present before extracting and generating
+  if (window.__proposalGenerationInProgress) {
+    console.log('Proposal generation already in progress, skipping');
+    return;
+  }
+  // Ensure dynamic content is present before starting generation
   await waitForPageToBeReady();
-  if (window.__proposalGenerationInProgress) {
-    console.log('Proposal generation already in progress, skipping');
-    return;
-  }
-  if (window.__proposalGenerated) {
-    console.log('Proposal already generated, skipping');
+  if (window.__proposalGenerated || window.__proposalGenerationInProgress) {
+    console.log('Proposal already generated or in progress after wait, skipping');
     return;
   }
   window.__proposalGenerationInProgress = true;
@@ -1267,7 +1313,7 @@ async function generateAutoProposal() {
   const isValidJobDescription = (text) => {
     if (!text || typeof text !== 'string') return false;
     const t = text.trim();
-    if (t.length < 120) return false; // too short to be meaningful
+    if (t.length < 50) return false; // reduced from 120 to 50 for truncated descriptions
     const bannedSnippets = [
       'Apply Now', 'Submit Proposal', 'Find freelancers and agencies', 'Find work', 'Messages',
       'Post a job', 'How it works', 'Become a freelancer', 'Navigation', 'Menu', 'Sign In', 'Sign Up',
