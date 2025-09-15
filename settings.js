@@ -46,7 +46,15 @@ function setupEventListeners() {
   if (previewTemplateBtn) previewTemplateBtn.addEventListener('click', previewTemplate);
   
   const promptTemplateSelect = document.getElementById('prompt-template');
-  if (promptTemplateSelect) promptTemplateSelect.addEventListener('change', () => { handleTemplateChange(); loadMetaPromptForSelected(); });
+  if (promptTemplateSelect) promptTemplateSelect.addEventListener('change', (e) => {
+    handleTemplateChange();
+    loadMetaPromptForSelected();
+    const value = e.target && e.target.value ? e.target.value : 'universal';
+    // Persist template and ensure AI mode is active when changing templates
+    chrome.storage.local.set({ promptTemplate: value, proposalMode: 'ai' }, () => {
+      console.log('Saved promptTemplate:', value);
+    });
+  });
 
   // Meta Prompt editor
   const saveMetaBtn = document.getElementById('save-meta-prompt');
