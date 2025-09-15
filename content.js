@@ -9,6 +9,13 @@ console.log('Upwork Cover Letter Generator loaded');
 
   // Add error handling wrapper
   try {
+// Guard flags to prevent duplicate proposal generation
+if (typeof window.__proposalGenerated === 'undefined') {
+  window.__proposalGenerated = false;
+}
+if (typeof window.__proposalGenerationInProgress === 'undefined') {
+  window.__proposalGenerationInProgress = false;
+}
 // Function to extract job description from Upwork page
 function extractJobDescription() {
   try {
@@ -406,6 +413,21 @@ function getKeyApproach(description) {
   } else {
     return 'problem-solving and efficient implementation';
   }
+}
+
+// Validate the extracted job description to ensure it's real job content
+function isValidJobDescription(text) {
+  if (!text || typeof text !== 'string') return false;
+  const t = text.trim();
+  if (t.length < 120) return false; // too short to be meaningful
+  const bannedSnippets = [
+    'Apply Now', 'Submit Proposal', 'Find freelancers and agencies', 'Find work', 'Messages',
+    'Post a job', 'How it works', 'Become a freelancer', 'Navigation', 'Menu', 'Sign In', 'Sign Up',
+    'Hourly range', 'Skills and expertise', 'View job posting', 'Featured Job',
+    'Apply to jobs posted by clients'
+  ];
+  if (bannedSnippets.some(s => t.includes(s))) return false;
+  return true;
 }
 
 // Function to detect additional questions in the application form
@@ -970,6 +992,15 @@ function modifyApplyButton() {
                      document.querySelector('a[href*="apply"]');
   
   if (applyButton) {
+    // Avoid attaching duplicate listeners
+    if (applyButton.dataset && applyButton.dataset.uclgModified === 'true') {
+      console.log('Apply button already modified');
+      return;
+    }
+    if (applyButton.setAttribute) {
+      applyButton.setAttribute('data-uclg-modified', 'true');
+      if (applyButton.dataset) applyButton.dataset.uclgModified = 'true';
+    }
     // Store original click handler
     const originalClick = applyButton.onclick;
     
@@ -978,12 +1009,23 @@ function modifyApplyButton() {
       e.preventDefault();
       e.stopPropagation();
       
+      // Ensure page is ready before extracting
+      await waitForPageToBeReady();
+
       // Extract job information
-      const jobTitle = extractJobTitle();
-      const jobDescription = extractJobDescription();
+      let jobTitle = extractJobTitle();
+      let jobDescription = extractJobDescription();
       const freelancerName = await extractFreelancerName();
+
+      // Validate; if invalid, retry once after short delay
+      if (!isValidJobDescription(jobDescription)) {
+        console.log('Invalid job description on click; retrying shortly...');
+        await new Promise(r => setTimeout(r, 1500));
+        jobTitle = extractJobTitle();
+        jobDescription = extractJobDescription();
+      }
       
-      if (jobDescription) {
+      if (isValidJobDescription(jobDescription)) {
         // Show loading notification
         showNotification('Generating AI-powered proposal...', 'info');
         
@@ -1020,7 +1062,7 @@ function modifyApplyButton() {
           showNotification('Error generating proposal: ' + error.message, 'error');
         }
       } else {
-        showNotification('Could not extract job description. Please try again.', 'error');
+        showNotification('Could not extract a valid job description yet. Please open the full job page and try again.', 'error');
       }
       
       // Call original click handler after a delay
@@ -1186,6 +1228,27 @@ function cleanup() {
 async function generateAutoProposal() {
   console.log('Generating automatic proposal...');
   console.log('Current URL:', window.location.href);
+  if (window.__proposalGenerationInProgress) {
+    console.log('Proposal generation already in progress, skipping');
+    return;
+  }
+  if (window.__proposalGenerated) {
+    console.log('Proposal already generated, skipping');
+    return;
+  }
+  window.__proposalGenerationInProgress = true;
+
+  // Ensure dynamic content is present before extracting and generating
+  await waitForPageToBeReady();
+  if (window.__proposalGenerationInProgress) {
+    console.log('Proposal generation already in progress, skipping');
+    return;
+  }
+  if (window.__proposalGenerated) {
+    console.log('Proposal already generated, skipping');
+    return;
+  }
+  window.__proposalGenerationInProgress = true;
   
   // Extract job information and freelancer name
   const jobTitle = extractJobTitle();
@@ -1200,7 +1263,21 @@ async function generateAutoProposal() {
   console.log('Freelancer name type:', typeof freelancerName);
   console.log('Freelancer name length:', freelancerName ? freelancerName.length : 'null');
   
-  if (jobDescription) {
+  // Validate the extracted job description to avoid generating from UI/navigation text
+  const isValidJobDescription = (text) => {
+    if (!text || typeof text !== 'string') return false;
+    const t = text.trim();
+    if (t.length < 120) return false; // too short to be meaningful
+    const bannedSnippets = [
+      'Apply Now', 'Submit Proposal', 'Find freelancers and agencies', 'Find work', 'Messages',
+      'Post a job', 'How it works', 'Become a freelancer', 'Navigation', 'Menu', 'Sign In', 'Sign Up',
+      'Hourly range', 'Skills and expertise', 'View job posting', 'Featured Job'
+    ];
+    if (bannedSnippets.some(s => t.includes(s))) return false;
+    return true;
+  };
+
+  if (isValidJobDescription(jobDescription)) {
     // Show loading notification
     showNotification('Generating AI proposal...', 'info');
     
@@ -1245,6 +1322,9 @@ async function generateAutoProposal() {
             console.log('Third attempt to fill cover letter...');
             fillCoverLetterField(coverLetter);
           }, 4000);
+          // Mark as generated after scheduling fills
+          window.__proposalGenerated = true;
+          window.__proposalGenerationInProgress = false;
         });
         
         // Check if auto-answer questions is enabled
@@ -1320,9 +1400,21 @@ ${freelancerName}`;
       
       fillCoverLetterField(fallbackProposal, 1);
       showNotification('Basic proposal generated (AI unavailable)', 'warning');
+      window.__proposalGenerated = true;
+      window.__proposalGenerationInProgress = false;
     }
   } else {
-    console.log('No job description found, generating generic proposal');
+    console.log('Job description not ready/invalid. Will retry once shortly.');
+    // Allow a single retry after a short delay
+    if (!window.__proposalRetryDone) {
+      window.__proposalGenerationInProgress = false;
+      window.__proposalRetryDone = true;
+      setTimeout(() => {
+        generateAutoProposal();
+      }, 2000);
+      return;
+    }
+    console.log('Retry already attempted. Generating a conservative generic proposal.');
     
     // Generate a generic proposal even without job description
     const genericProposal = `I have over 8 years of experience and I'm really excited about this ${jobTitle} project. I've worked on similar stuff before and I think I can help you out here.
@@ -1336,6 +1428,8 @@ ${freelancerName}`;
     
     fillCoverLetterField(genericProposal, 0);
     showNotification('Generic proposal generated (no job description found)', 'warning');
+    window.__proposalGenerated = true;
+    window.__proposalGenerationInProgress = false;
   }
 }
 
@@ -1404,9 +1498,16 @@ function initialize() {
                                   document.querySelector('textarea.inner-textarea') ||
                                   document.querySelector('textarea.air3-textarea');
           
-          if (coverLetterField && !coverLetterField.hasAttribute('data-proposal-filled')) {
-            coverLetterField.setAttribute('data-proposal-filled', 'true');
-            generateAutoProposal();
+          if (coverLetterField && !window.__proposalGenerated && !window.__proposalGenerationInProgress) {
+            // Prefer filling from stored cover letter if available to avoid regenerating
+            chrome.storage.local.get(['coverLetter'], (res) => {
+              if (res && res.coverLetter) {
+                fillCoverLetterField(res.coverLetter, 1);
+                window.__proposalGenerated = true;
+              } else {
+                generateAutoProposal();
+              }
+            });
           }
         }
     }
