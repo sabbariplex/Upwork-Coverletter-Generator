@@ -227,7 +227,6 @@ const AI_PROMPTS_TEMPLATES = {
   universal: {
     metaPrompt: `Generate an Upwork proposal. Follow ALL rules:
 - Start with: "I have 8+ years of experience—[mirror client need in plain English]."
-- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
 - Mention relevant tools (swap per job: GSC, GA4, Screaming Frog, Git, Docker, Figma, etc.).
 - Short sentences. Max 8 lines. No bullets. No exclamation points.
 - Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
@@ -244,7 +243,6 @@ Question: [one precise clarifying question]?`
   software: {
     metaPrompt: `Generate an Upwork proposal for software development. Follow ALL rules:
 - Start with: "I have 8+ years of experience—you need [feature/app/integration] that [does X]."
-- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
 - Mention relevant tools: Git, GitHub Actions, Docker, AWS/GCP, Postman, Jira.
 - Short sentences. Max 8 lines. No bullets. No exclamation points.
 - Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
@@ -276,7 +274,6 @@ Question: Which pages drive the highest-margin conversions today?`
   design: {
     metaPrompt: `Generate an Upwork proposal for design/UX. Follow ALL rules:
 - Start with: "I have 8+ years of experience—you need a [UI/UX/brand] that solves [use case]."
-- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
 - Mention relevant tools: Figma, FigJam, Adobe CC, WCAG, Zeplin.
 - Short sentences. Max 8 lines. No bullets. No exclamation points.
 - Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
