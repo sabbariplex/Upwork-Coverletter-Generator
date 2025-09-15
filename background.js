@@ -718,29 +718,23 @@ async function generateQuestionAnswers(questions, jobTitle, jobDescription) {
     // Create a prompt for all questions
     const questionsText = questions.map((q, index) => `${index + 1}. ${q.label} (${q.type === 'textarea' ? 'Long answer' : 'Short answer'})`).join('\n');
     
-    const systemMessage = `You are an expert Upwork freelancer with extensive technical knowledge. Answer application questions professionally, specifically, and technically based on the job requirements. Provide detailed, accurate technical answers that demonstrate expertise.`;
+    const systemMessage = `You are an expert Upwork freelancer. Answer each question concisely (1–3 sentences), directly, and specifically based on the job. Do not ask any questions back. No greetings, no bullets, no numbered lists, no fluff.`;
     
-    const userMessage = `Based on this Upwork job, provide professional and technical answers to these application questions:
+    const userMessage = `Provide short, direct answers to these Upwork application questions.
 
 JOB TITLE: ${jobTitle}
 JOB DESCRIPTION: ${jobDescription}
 
-QUESTIONS TO ANSWER:
+QUESTIONS:
 ${questionsText}
 
-INSTRUCTIONS:
-- Answer each question with specific technical details and expertise
-- Show deep knowledge of the technologies mentioned
-- Provide practical examples and solutions
-- Be professional but demonstrate technical competence
-- For technical questions: Give detailed, accurate answers
-- For experience questions: Show relevant expertise
-- For approach questions: Explain your methodology
-- Use the freelancer name: ${settings.yourName || 'Your Name'}
+STRICT RULES:
+- Keep each answer brief: 1–3 sentences maximum.
+- Be specific to the job; include concrete tech/tools if relevant.
+- Do not ask any questions back.
+- No bullets, no numbered lists, no salutations.
 
-IMPORTANT: Answer each question completely and technically. Do not give generic responses like "I have experience in this area." Instead, provide specific, detailed technical answers that showcase your expertise.
-
-Provide answers in the same order as the questions, one per line, separated by "---ANSWER---".`;
+Return answers in order, one per question, separated by "---ANSWER---".`;
 
     // Try OpenAI first if API key is available
     if (settings.openaiApiKey && settings.openaiApiKey.trim()) {
@@ -884,7 +878,7 @@ function parseQuestionAnswers(content, expectedCount) {
     answers = lines.filter(line => /^\d+\./.test(line.trim())).map(line => line.replace(/^\d+\.\s*/, '').trim());
   }
   
-  // Clean up answers by removing numbering and extra formatting
+  // Clean up answers by removing numbering and extra formatting, enforce brevity
   answers = answers.map(answer => {
     // Remove leading numbers like "1.", "2.", etc.
     answer = answer.replace(/^\d+\.\s*/, '');
@@ -895,8 +889,14 @@ function parseQuestionAnswers(content, expectedCount) {
     answer = answer.replace(/^Q\d*:?\s*/i, '');
     answer = answer.replace(/^Anwser\s*\d*:?\s*/i, '');
     
-    // Clean up extra whitespace
-    answer = answer.trim();
+    // Remove trailing question marks or question-like endings
+    answer = answer.replace(/\?\s*$/,'').trim();
+    // Enforce brevity: trim to ~260 characters max while preserving sentence boundary if possible
+    if (answer.length > 260) {
+      const cut = answer.slice(0, 260);
+      const lastPeriod = cut.lastIndexOf('.');
+      answer = (lastPeriod > 80 ? cut.slice(0, lastPeriod + 1) : cut).trim();
+    }
     
     return answer;
   }).filter(answer => answer.length > 0);
@@ -934,28 +934,28 @@ function generateLocalQuestionAnswers(questions, jobTitle, jobDescription, setti
   questions.forEach(question => {
     const label = question.label.toLowerCase();
     
-    // WordPress/Web Development specific answers
+    // WordPress/Web Development specific answers (concise)
     if (label.includes('wordpress') || label.includes('custom post type') || label.includes('cpt') || label.includes('real estate')) {
-      answers.push(`For WordPress real estate listings, I would create a Custom Post Type called 'Property' with custom fields like 'price', 'bedrooms', 'bathrooms', 'square_feet', 'address', and 'property_images'. I'd use taxonomies like 'property_type' (house, condo, apartment) and 'location' (city, neighborhood). This structure allows for easy filtering, searching, and management of listings.`);
+      answers.push(`Create a 'Property' CPT with fields for price, beds, baths, sqft, address, images; add taxonomies for type and location.`);
     } else if (label.includes('container queries') || label.includes('css') || label.includes('responsive') || label.includes('components')) {
-      answers.push(`Container Queries solve the problem of component-based responsive design by allowing elements to respond to their container's size rather than just the viewport. This is a game-changer because it enables truly reusable components that adapt to their context, making design systems more flexible and maintainable.`);
+      answers.push(`Use CSS Container Queries so components adapt to parent size, enabling reusable, context-aware responsive UI.`);
     } else if (label.includes('experience') || label.includes('background')) {
-      answers.push(`I have extensive experience in ${extractFieldFromDescription(jobDescription)} and have successfully completed similar projects. I'm confident I can deliver excellent results for this ${jobTitle} project.`);
+      answers.push(`Experienced in ${extractFieldFromDescription(jobDescription)} with similar deliveries for clients using relevant tools and best practices.`);
     } else if (label.includes('approach') || label.includes('method')) {
-      answers.push(`My approach involves understanding your specific requirements, creating a detailed plan, and implementing the solution with regular updates and communication throughout the project.`);
+      answers.push(`Clarify scope, define plan, implement in milestones with reviews, and ship tested deliverables.`);
     } else if (label.includes('timeline') || label.includes('schedule') || label.includes('when')) {
-      answers.push(`I can start immediately and typically complete similar projects within 1-2 weeks, depending on the specific requirements. I'll provide a detailed timeline once I understand the full scope.`);
+      answers.push(`Can start now; typical delivery is 1–2 weeks depending on scope.`);
     } else if (label.includes('portfolio') || label.includes('examples') || label.includes('work')) {
-      answers.push(`I have a strong portfolio of similar projects and can provide examples upon request. My previous work demonstrates my expertise in this area.`);
+      answers.push(`I have related work samples and can share links on request.`);
     } else if (label.includes('why') || label.includes('choose') || label.includes('hire')) {
-      answers.push(`I'm the right fit for this project because of my relevant experience, attention to detail, and commitment to delivering high-quality work on time. I'm dedicated to your success.`);
+      answers.push(`Relevant experience, clean execution, and reliable communication throughout delivery.`);
     } else if (label.includes('budget') || label.includes('cost') || label.includes('price')) {
-      answers.push(`I'm happy to discuss the budget based on the specific requirements. I offer competitive rates and excellent value for the quality of work provided.`);
+      answers.push(`I align scope to budget and provide clear estimates before work starts.`);
     } else if (label.includes('communication') || label.includes('contact') || label.includes('update')) {
-      answers.push(`I maintain clear and regular communication throughout the project, providing updates on progress and being available to answer questions promptly.`);
+      answers.push(`Regular updates, async-friendly communication, and fast responses in your timezone.`);
     } else {
-      // Generic answer for any other question
-      answers.push(`I have relevant experience and skills for this ${jobTitle} project. I'm confident I can help you achieve your goals and deliver excellent results.`);
+      // Generic concise answer
+      answers.push(`I have relevant experience for this ${jobTitle} project and can deliver efficiently.`);
     }
   });
   
