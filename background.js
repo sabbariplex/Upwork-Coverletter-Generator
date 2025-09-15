@@ -718,7 +718,7 @@ async function generateQuestionAnswers(questions, jobTitle, jobDescription) {
     // Create a prompt for all questions
     const questionsText = questions.map((q, index) => `${index + 1}. ${q.label} (${q.type === 'textarea' ? 'Long answer' : 'Short answer'})`).join('\n');
     
-    const systemMessage = `You are an expert Upwork freelancer. Answer each question concisely (1–3 sentences), directly, and specifically based on the job. Do not ask any questions back. No greetings, no bullets, no numbered lists, no fluff.`;
+    const systemMessage = `You are an expert Upwork freelancer. Answer each question concisely (2–4 sentences when multiple examples are requested; otherwise 1–3), direct and specific to the job. Do not ask any questions back. No greetings, no bullets, no numbered lists, no fluff.`;
     
     const userMessage = `Provide short, direct answers to these Upwork application questions.
 
@@ -729,7 +729,7 @@ QUESTIONS:
 ${questionsText}
 
 STRICT RULES:
-- Keep each answer brief: 1–3 sentences maximum.
+- Keep each answer brief: 1–3 sentences; if the prompt asks for multiple items/examples, write 2–4 sentences that cover them succinctly (no bullets).
 - Be specific to the job; include concrete tech/tools if relevant.
 - Do not ask any questions back.
 - No bullets, no numbered lists, no salutations.
@@ -878,7 +878,7 @@ function parseQuestionAnswers(content, expectedCount) {
     answers = lines.filter(line => /^\d+\./.test(line.trim())).map(line => line.replace(/^\d+\.\s*/, '').trim());
   }
   
-  // Clean up answers by removing numbering and extra formatting, enforce brevity
+  // Clean up answers by removing numbering and extra formatting, enforce brevity but allow slightly longer for multi-example prompts
   answers = answers.map(answer => {
     // Remove leading numbers like "1.", "2.", etc.
     answer = answer.replace(/^\d+\.\s*/, '');
@@ -891,9 +891,10 @@ function parseQuestionAnswers(content, expectedCount) {
     
     // Remove trailing question marks or question-like endings
     answer = answer.replace(/\?\s*$/,'').trim();
-    // Enforce brevity: trim to ~260 characters max while preserving sentence boundary if possible
-    if (answer.length > 260) {
-      const cut = answer.slice(0, 260);
+    // Enforce brevity: default ~260 chars; if the question likely requests multiple examples (3, three, outline results), allow ~420 chars
+    const maxLen = /\b(3|three)\b|outline\s+the\s+results|each\s+project/i.test(answer) ? 420 : 260;
+    if (answer.length > maxLen) {
+      const cut = answer.slice(0, maxLen);
       const lastPeriod = cut.lastIndexOf('.');
       answer = (lastPeriod > 80 ? cut.slice(0, lastPeriod + 1) : cut).trim();
     }
