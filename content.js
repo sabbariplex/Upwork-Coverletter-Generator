@@ -27,6 +27,118 @@ function expandTruncatedDescription() {
   return false;
 }
 
+// Parse ld+json for JobPosting description
+function extractFromLdJson() {
+  try {
+    const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+    for (const s of scripts) {
+      try {
+        const data = JSON.parse(s.textContent || 'null');
+        const list = Array.isArray(data) ? data : [data];
+        for (const item of list) {
+          if (item && (item['@type'] === 'JobPosting' || (Array.isArray(item['@type']) && item['@type'].includes('JobPosting')))) {
+            if (item.description && typeof item.description === 'string') {
+              return item.description.trim();
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  } catch (err) {
+    console.log('ld+json parse error', err);
+  }
+  return null;
+}
+
+// Classless scoring-based extractor
+function extractByHeuristics() {
+  const containerCandidates = Array.from(document.querySelectorAll('article, section, div'));
+  const bannedSnippets = ['Apply Now','Submit Proposal','Navigation','Menu','Sign In','Sign Up','Hourly range','Skills and expertise','Featured Job'];
+  const jobKeywords = ['responsibilities','requirements','experience','skills','project','deliverables','scope','seo','wordpress','react','node','api','design','analytics','marketing'];
+  let best = { score: 0, text: '' };
+  for (const el of containerCandidates) {
+    const t = (el.textContent || '').trim();
+    if (t.length < 80 || t.length > 8000) continue;
+    if (bannedSnippets.some(s => t.includes(s))) continue;
+    const lower = t.toLowerCase();
+    const kwScore = jobKeywords.reduce((acc, k) => acc + (lower.includes(k) ? 1 : 0), 0);
+    const lengthScore = Math.min(100, Math.floor(t.length / 200));
+    const punctuationScore = (t.match(/[\.!?]/g) || []).length;
+    const score = kwScore * 10 + lengthScore + Math.min(50, punctuationScore);
+    if (score > best.score) best = { score, text: t };
+  }
+  return best.text || null;
+}
+
+// Fetch and parse canonical job page off-DOM
+async function fetchAndParseJobDescription() {
+  try {
+    const link = document.querySelector('[data-test="open-original-posting"], a[href*="/jobs/~"], a[href*="/job/"]');
+    if (!link || !link.href) return null;
+    const url = link.href.startsWith('http') ? link.href : (location.origin + link.getAttribute('href'));
+    console.log('Fetching original posting:', url);
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    // Try ld+json in fetched page
+    const ld = Array.from(doc.querySelectorAll('script[type="application/ld+json"]'));
+    for (const s of ld) {
+      try {
+        const data = JSON.parse(s.textContent || 'null');
+        const list = Array.isArray(data) ? data : [data];
+        for (const item of list) {
+          if (item && (item['@type'] === 'JobPosting' || (Array.isArray(item['@type']) && item['@type'].includes('JobPosting')))) {
+            if (item.description && typeof item.description === 'string') {
+              return item.description.trim();
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    // Heuristic on fetched DOM
+    const blocks = Array.from(doc.querySelectorAll('article, section, div'));
+    let best = { score: 0, text: '' };
+    const banned = ['Apply Now','Submit Proposal','Navigation','Menu','Sign In','Sign Up','Hourly range','Skills and expertise','Featured Job'];
+    const kws = ['responsibilities','requirements','experience','skills','project','deliverables','scope','seo','wordpress','react','node','api','design','analytics','marketing'];
+    for (const el of blocks) {
+      const t = (el.textContent || '').trim();
+      if (t.length < 80 || t.length > 8000) continue;
+      if (banned.some(s => t.includes(s))) continue;
+      const lower = t.toLowerCase();
+      const kwScore = kws.reduce((acc, k) => acc + (lower.includes(k) ? 1 : 0), 0);
+      const lengthScore = Math.min(100, Math.floor(t.length / 200));
+      const punctuationScore = (t.match(/[\.!?]/g) || []).length;
+      const score = kwScore * 10 + lengthScore + Math.min(50, punctuationScore);
+      if (score > best.score) best = { score, text: t };
+    }
+    return best.text || null;
+  } catch (e) {
+    console.log('Off-page fetch failed', e);
+    return null;
+  }
+}
+
+function getCurrentJobId() {
+  const m = location.pathname.match(/jobs\/~([\w\d]+)/) || location.href.match(/jobs\/~([\w\d]+)/);
+  return m ? m[1] : null;
+}
+
+async function getCachedDescription() {
+  const id = getCurrentJobId();
+  if (!id) return null;
+  return new Promise(resolve => {
+    chrome.storage.local.get([`jobDesc_${id}`], res => resolve(res[`jobDesc_${id}`] || null));
+  });
+}
+
+function cacheDescription(text) {
+  const id = getCurrentJobId();
+  if (!id || !text) return;
+  chrome.storage.local.set({ [`jobDesc_${id}`]: text.slice(0, 12000) });
+}
+
 // Function to extract job description from Upwork page
 function extractJobDescription() {
   try {
@@ -48,24 +160,6 @@ function extractJobDescription() {
   if (truncatedDesc && truncatedDesc.textContent && truncatedDesc.textContent.trim().length > 10) {
     const text = truncatedDesc.textContent.trim();
     console.log('Found truncated job description:', text.substring(0, 100) + '...');
-    
-    // Try to expand the description by clicking "more" button
-    const moreButton = document.querySelector('.air3-truncation-btn');
-    if (moreButton && text.includes('…')) {
-      console.log('Clicking "more" button to expand description...');
-      moreButton.click();
-      
-      // Wait a bit for the content to expand, then try again
-      setTimeout(() => {
-        const expandedDesc = document.querySelector('.description .air3-truncation span span');
-        if (expandedDesc && expandedDesc.textContent && expandedDesc.textContent.trim().length > text.length) {
-          const expandedText = expandedDesc.textContent.trim();
-          console.log('Found expanded job description:', expandedText.substring(0, 100) + '...');
-          return expandedText;
-        }
-      }, 500);
-    }
-    
     return text;
   }
 
@@ -125,13 +219,12 @@ function extractJobDescription() {
     console.log('Trying selectors...');
   for (const selector of selectors) {
     const element = document.querySelector(selector);
-    if (element && element.textContent.trim()) {
+    if (element && element.textContent && element.textContent.trim()) {
         const text = element.textContent.trim();
         console.log(`Found text with selector "${selector}":`, text.substring(0, 100) + '...');
-        console.log(`Full text for selector "${selector}":`, text);
         
         // Check if this looks like a job description (has reasonable length and content)
-        if (text.length > 100 && text.length < 5000 && 
+        if (text.length > 80 && text.length < 8000 && 
             !text.includes('Apply Now') && !text.includes('Submit Proposal') &&
             !text.includes('Posted') && !text.includes('Hourly range') &&
             !text.includes('Skills and expertise') && !text.includes('View job posting')) {
@@ -141,83 +234,48 @@ function extractJobDescription() {
       }
     }
     
-    // Fallback: look for any element containing substantial text that might be job description
-    console.log('Trying fallback methods...');
-    
-    // First, try to find text that looks like a job description by keywords
-    const jobKeywords = ['looking for', 'need', 'require', 'project', 'work', 'experience', 'skills', 'css', 'liquid', 'shopify', 'wordpress', 'react', 'api', 'deadline'];
-    const allElements = document.querySelectorAll('div, section, article, p, span');
-    
-    for (const element of allElements) {
-      const text = element.textContent.trim();
-      if (text.length > 50 && text.length < 1000) {
-        // Check if this text contains job-related keywords
-        const hasJobKeywords = jobKeywords.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()));
-        if (hasJobKeywords && 
-            !text.includes('Apply Now') && 
-            !text.includes('Submit Proposal') && 
-            !text.includes('Navigation') &&
-            !text.includes('Menu') &&
-            !text.includes('Sign In') &&
-            !text.includes('Sign Up') &&
-            !text.includes('Profile') &&
-            !text.includes('Messages') &&
-            !text.includes('Hourly range') &&
-            !text.includes('Skills and expertise')) {
-          console.log('Found job description by keywords:', text);
-          return text;
-        }
-      }
+    // Fallback 1: ld+json JobPosting
+    const ld = extractFromLdJson();
+    if (ld && ld.trim().length > 50) {
+      console.log('Using description from ld+json JobPosting');
+      return ld.trim();
     }
-    
-    // Look for the largest text block on the page that's likely job content
-    let bestCandidate = null;
-    let maxLength = 0;
-    
-    for (const element of allElements) {
-      const text = element.textContent.trim();
-      if (text.length > maxLength && text.length > 100 && text.length < 5000) {
-        // Skip navigation, buttons, and other non-content elements
-        if (!text.includes('Apply Now') && 
-            !text.includes('Submit Proposal') && 
-            !text.includes('Navigation') &&
-            !text.includes('Menu') &&
-            !text.includes('Sign In') &&
-            !text.includes('Sign Up') &&
-            !text.includes('Profile') &&
-            !text.includes('Messages') &&
-            !text.includes('Notifications') &&
-            !text.includes('Posted') &&
-            !text.includes('Hourly range') &&
-            !text.includes('Skills and expertise') &&
-            !text.includes('View job posting') &&
-            !text.includes('Featured Job') &&
-            !text.includes('Close the tooltip') &&
-            !text.includes('Less than') &&
-            !text.includes('Project length') &&
-            !text.includes('Duration')) {
-          bestCandidate = text;
-          maxLength = text.length;
-        }
-      }
+
+    // Fallback 2: classless heuristic
+    const heur = extractByHeuristics();
+    if (heur) {
+      console.log('Using description from heuristic extractor');
+      return heur;
     }
-    
-    if (bestCandidate) {
-      console.log('Found best candidate text:', bestCandidate.substring(0, 100) + '...');
-      return bestCandidate;
-    }
-    
-    // Last resort: get all text content and try to extract meaningful parts
-    const bodyText = document.body.textContent;
-    console.log('Body text length:', bodyText.length);
-    console.log('Body text sample:', bodyText.substring(0, 200) + '...');
-    
+
+    // Fallback 3: none found
     return null;
   } catch (error) {
     console.error('Error extracting job description:', error);
   return null;
   }
 }
+
+// Retry extraction once after truncation expands
+(function setupDescriptionMutationRetry(){
+  try {
+    const container = document.querySelector('.fe-job-details') || document.querySelector('.job-details-content') || document.body;
+    if (!container) return;
+    let retried = false;
+    const mo = new MutationObserver(() => {
+      if (retried) return;
+      const expanded = document.querySelector('.air3-truncation-btn[aria-expanded="true"]');
+      if (expanded) {
+        retried = true;
+        setTimeout(() => {
+          const desc = extractJobDescription();
+          if (desc) cacheDescription(desc);
+        }, 400);
+      }
+    });
+    mo.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-expanded'] });
+  } catch (_) {}
+})();
 
 // Function to extract freelancer name from profile or settings
 async function extractFreelancerName() {
@@ -1298,8 +1356,26 @@ async function generateAutoProposal() {
   
   // Extract job information and freelancer name
   const jobTitle = extractJobTitle();
-  const jobDescription = extractJobDescription();
+  let jobDescription = extractJobDescription();
   const freelancerName = await extractFreelancerName();
+  
+  if (!jobDescription || jobDescription.trim().length < 50) {
+    const cached = await getCachedDescription();
+    if (cached && cached.trim().length >= 50) {
+      console.log('Using cached job description');
+      jobDescription = cached;
+    }
+  }
+  
+  if (!jobDescription || jobDescription.trim().length < 50) {
+    try {
+      const fetched = await fetchAndParseJobDescription();
+      if (fetched && fetched.trim().length >= 50) {
+        console.log('Using off-page fetched job description');
+        jobDescription = fetched.trim();
+      }
+    } catch (_) {}
+  }
   
   console.log('Extracted job title:', jobTitle);
   console.log('Extracted job description length:', jobDescription ? jobDescription.length : 'null');
@@ -1324,6 +1400,8 @@ async function generateAutoProposal() {
   };
 
   if (isValidJobDescription(jobDescription)) {
+    // Cache for future loads
+    cacheDescription(jobDescription);
     // Show loading notification
     showNotification('Generating AI proposal...', 'info');
     
