@@ -1134,8 +1134,8 @@ function modifyApplyButton() {
       }
       
       if (isValidJobDescription(jobDescription)) {
-        // Show loading notification
-        showNotification('Generating AI-powered proposal...', 'info');
+        // Show loading overlay
+        showLoadingOverlay('Generating cover letter...');
         
         try {
           // Send message to background script to generate cover letter with ChatGPT
@@ -1155,21 +1155,25 @@ function modifyApplyButton() {
           jobDescription: jobDescription
         });
         
-            // Show success notification
-            showNotification('AI proposal generated! Check the application form.', 'success');
+            // Update overlay while filling
+            updateLoadingOverlay('Filling cover letter...');
         
         // Try to find and fill cover letter field (high priority)
         setTimeout(() => {
           fillCoverLetterField(coverLetter, 2);
+          hideLoadingOverlay();
+          showNotification('AI proposal generated! Check the application form.', 'success');
         }, 1000);
       } else {
             throw new Error(response.error || 'Failed to generate proposal');
           }
         } catch (error) {
           console.error('Error generating proposal:', error);
+          hideLoadingOverlay();
           showNotification('Error generating proposal: ' + error.message, 'error');
         }
       } else {
+        hideLoadingOverlay();
         showNotification('Could not extract a valid job description yet. Please open the full job page and try again.', 'error');
       }
       
@@ -1325,6 +1329,123 @@ function showNotification(message, type = 'success') {
   }, timeout);
 }
 
+// Non-blocking progress toast (top-right)
+let __uclgToastEl = null;
+let __uclgToastTextEl = null;
+function showLoadingOverlay(message) {
+  try {
+    if (__uclgToastEl) { updateLoadingOverlay(message); return; }
+    const toast = document.createElement('div');
+    toast.setAttribute('aria-live', 'polite');
+    toast.setAttribute('role', 'status');
+    toast.style.cssText = `
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      z-index: 2147483647;
+      background: linear-gradient(180deg, rgba(17,24,39,0.96), rgba(17,24,39,0.92));
+      color: #e5e7eb;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      grid-template-rows: auto auto;
+      grid-column-gap: 10px;
+      grid-row-gap: 8px;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      max-width: 380px;
+      pointer-events: none;
+      transform: translateX(16px);
+      opacity: 0;
+      animation: uclg-slide-in 240ms ease-out forwards;
+    `;
+    const spinnerWrap = document.createElement('div');
+    spinnerWrap.style.cssText = `
+      width: 18px; height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    `;
+    const spinner = document.createElement('div');
+    spinner.style.cssText = `
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.22);
+      border-top-color: #60a5fa;
+      border-radius: 50%;
+      animation: uclg-spin 1s linear infinite;
+    `;
+    spinnerWrap.appendChild(spinner);
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex; align-items: center; gap: 8px; line-height: 1.2; color: #f9fafb;
+    `;
+    const badge = document.createElement('span');
+    badge.textContent = 'AI';
+    badge.style.cssText = `
+      font-size: 10px; letter-spacing: 0.3px; color: #111827; background: #93c5fd; border-radius: 999px; padding: 2px 6px; font-weight: 700;
+    `;
+    const title = document.createElement('span');
+    title.textContent = 'Working';
+    title.style.cssText = `font-weight: 600;`;
+    header.appendChild(badge);
+    header.appendChild(title);
+    const text = document.createElement('div');
+    text.style.cssText = `white-space: pre-line; color: #e5e7eb;`;
+    text.textContent = message || 'Working...';
+    const progress = document.createElement('div');
+    progress.style.cssText = `
+      grid-column: 1 / -1;
+      height: 3px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+      overflow: hidden;
+    `;
+    const bar = document.createElement('div');
+    bar.style.cssText = `
+      width: 40%; height: 100%;
+      background: linear-gradient(90deg, #60a5fa, #93c5fd);
+      border-radius: 999px;
+      animation: uclg-indeterminate 1.2s ease-in-out infinite;
+    `;
+    progress.appendChild(bar);
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes uclg-spin{to{transform:rotate(360deg)}}
+      @keyframes uclg-slide-in{from{transform:translateX(16px);opacity:0}to{transform:translateX(0);opacity:1}}
+      @keyframes uclg-indeterminate{0%{margin-left:-40%}50%{margin-left:60%}100%{margin-left:120%}}
+    `;
+    toast.appendChild(spinnerWrap);
+    toast.appendChild(header);
+    toast.appendChild(document.createElement('div')); // spacer in first column
+    toast.appendChild(text);
+    toast.appendChild(progress);
+    toast.appendChild(style);
+    document.body.appendChild(toast);
+    __uclgToastEl = toast;
+    __uclgToastTextEl = text;
+  } catch (_) {}
+}
+function updateLoadingOverlay(message) {
+  try {
+    if (__uclgToastTextEl && typeof message === 'string' && message.trim()) {
+      __uclgToastTextEl.textContent = message;
+    }
+  } catch (_) {}
+}
+function hideLoadingOverlay() {
+  try {
+    if (__uclgToastEl && __uclgToastEl.parentNode) {
+      __uclgToastEl.parentNode.removeChild(__uclgToastEl);
+    }
+  } catch (_) {}
+  __uclgToastEl = null;
+  __uclgToastTextEl = null;
+}
+
 // Cleanup function
 function cleanup() {
   if (window.upworkCoverLetterObserver) {
@@ -1402,8 +1523,8 @@ async function generateAutoProposal() {
   if (isValidJobDescription(jobDescription)) {
     // Cache for future loads
     cacheDescription(jobDescription);
-    // Show loading notification
-    showNotification('Generating AI proposal...', 'info');
+    // Show loading overlay
+    showLoadingOverlay('Generating cover letter...');
     
     try {
       // Send message to background script to generate cover letter with ChatGPT
@@ -1420,6 +1541,7 @@ async function generateAutoProposal() {
       
       // Check if the response indicates a usage limit was reached
       if (response.limitReached) {
+        hideLoadingOverlay();
         showNotification('Free limit reached! Upgrade to Premium for unlimited proposals.', 'warning');
         // Still generate a fallback proposal
         throw new Error('Usage limit reached');
@@ -1434,6 +1556,7 @@ async function generateAutoProposal() {
           
           // Fill cover letter with multiple attempts and longer delays
           fillCoverLetterField(coverLetter);
+          updateLoadingOverlay('Filling cover letter...');
           
           // Try again after 2 seconds
           setTimeout(() => {
@@ -1449,6 +1572,13 @@ async function generateAutoProposal() {
           // Mark as generated after scheduling fills
           window.__proposalGenerated = true;
           window.__proposalGenerationInProgress = false;
+          // Let questions phase manage hiding if enabled; otherwise hide here after brief delay
+          setTimeout(() => {
+            if (!document.querySelector('.fe-proposal-job-questions') && !document.querySelector('.questions-area')) {
+              hideLoadingOverlay();
+              showNotification('AI proposal generated and filled!', 'success');
+            }
+          }, 1000);
         });
         
         // Check if auto-answer questions is enabled
@@ -1469,12 +1599,15 @@ async function generateAutoProposal() {
                   
                   if (additionalQuestions.length > 0) {
                     console.log('Generating answers for', additionalQuestions.length, 'questions');
+                    updateLoadingOverlay('Generating answers to questions...');
                     generateQuestionAnswers(additionalQuestions, jobTitle, jobDescription)
                       .then(answers => {
                         console.log('Generated answers:', answers);
+                        updateLoadingOverlay('Filling answers...');
                         return fillQuestionFieldsWithRetry(additionalQuestions, answers);
                       })
                       .then(success => {
+                        hideLoadingOverlay();
                         if (success) {
                           showNotification(`AI proposal and ${additionalQuestions.length} question answers generated!`, 'success');
                         } else {
@@ -1483,10 +1616,12 @@ async function generateAutoProposal() {
                       })
                       .catch(error => {
                         console.error('Error generating question answers:', error);
+                        hideLoadingOverlay();
                         showNotification('AI proposal generated! (Questions could not be filled)', 'success');
                       });
                   } else {
                     console.log('No additional questions detected');
+                    hideLoadingOverlay();
                     showNotification('AI proposal generated and filled!', 'success');
                   }
                 });
@@ -1494,6 +1629,7 @@ async function generateAutoProposal() {
             }, 3000); // Wait 3 seconds after cover letter is filled
           } else {
             console.log('Auto-answer questions is disabled');
+            hideLoadingOverlay();
             showNotification('AI proposal generated and filled!', 'success');
           }
         });
@@ -1526,6 +1662,7 @@ ${freelancerName}`;
       showNotification('Basic proposal generated (AI unavailable)', 'warning');
       window.__proposalGenerated = true;
       window.__proposalGenerationInProgress = false;
+      hideLoadingOverlay();
     }
   } else {
     console.log('Job description not ready/invalid. Will retry once shortly.');
@@ -1554,6 +1691,7 @@ ${freelancerName}`;
     showNotification('Generic proposal generated (no job description found)', 'warning');
     window.__proposalGenerated = true;
     window.__proposalGenerationInProgress = false;
+    hideLoadingOverlay();
   }
 }
 

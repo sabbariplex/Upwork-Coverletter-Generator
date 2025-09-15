@@ -166,6 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+
   
   // Function to load usage information
   function loadUsageInfo() {
