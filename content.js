@@ -1008,9 +1008,9 @@ function modifyApplyButton() {
             // Show success notification
             showNotification('AI proposal generated! Check the application form.', 'success');
         
-        // Try to find and fill cover letter field
+        // Try to find and fill cover letter field (high priority)
         setTimeout(() => {
-          fillCoverLetterField(coverLetter);
+          fillCoverLetterField(coverLetter, 2);
         }, 1000);
       } else {
             throw new Error(response.error || 'Failed to generate proposal');
@@ -1041,8 +1041,17 @@ function modifyApplyButton() {
   }
 }
 
-// Function to fill cover letter field
-function fillCoverLetterField(coverLetter) {
+// Function to fill cover letter field with priority control
+function fillCoverLetterField(coverLetter, priority = 1) {
+  // Track the best content we've set so far to avoid overwriting with lower-quality text
+  if (typeof window.__coverLetterFillPriority === 'undefined') {
+    window.__coverLetterFillPriority = 0;
+  }
+  if (priority < window.__coverLetterFillPriority) {
+    console.log(`Skipping cover letter fill due to lower priority (${priority} < ${window.__coverLetterFillPriority})`);
+    return false;
+  }
+
   const coverLetterSelectors = [
                     'textarea[aria-labelledby="cover_letter_label"]',
                     'textarea.inner-textarea',
@@ -1056,28 +1065,43 @@ function fillCoverLetterField(coverLetter) {
     'textarea[aria-label*="letter"]'
   ];
   
+  const applyValue = (field) => {
+    // Avoid unnecessary writes if the text already matches
+    if ((field.value || '').trim() === coverLetter.trim()) {
+      window.__coverLetterFillPriority = priority;
+      return true;
+    }
+    field.value = coverLetter;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+    window.__coverLetterFillPriority = priority;
+    return true;
+  };
+
   for (const selector of coverLetterSelectors) {
     const field = document.querySelector(selector);
     if (field) {
-      field.value = coverLetter;
-      field.dispatchEvent(new Event('input', { bubbles: true }));
-      field.dispatchEvent(new Event('change', { bubbles: true }));
-      console.log('Cover letter filled successfully');
-      return;
+      const ok = applyValue(field);
+      if (ok) {
+        console.log(`Cover letter filled successfully (priority ${priority})`);
+        return true;
+      }
     }
   }
   
-  // If no specific field found, try to find any textarea
+  // If no specific field found, try to find any textarea that looks like the cover letter
   const textareas = document.querySelectorAll('textarea');
   for (const textarea of textareas) {
     if (textarea.offsetHeight > 100) { // Likely a cover letter field
-      textarea.value = coverLetter;
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      textarea.dispatchEvent(new Event('change', { bubbles: true }));
-      console.log('Cover letter filled in general textarea');
-      return;
+      const ok = applyValue(textarea);
+      if (ok) {
+        console.log(`Cover letter filled in general textarea (priority ${priority})`);
+        return true;
+      }
     }
   }
+  console.log('Cover letter field not found');
+  return false;
 }
 
 // Lightweight message handler for settings page interactions
@@ -1289,14 +1313,12 @@ async function generateAutoProposal() {
 
 I usually focus on getting things done right the first time and keeping you updated along the way. I'm pretty flexible with timelines and can start whenever you need me.
 
-What's the most important part of this project for you? And do you prefer to chat through Upwork messages or would you rather hop on a quick call to discuss details?
-
 Looking forward to working with you!
 
 Thanks,
 ${freelancerName}`;
       
-      fillCoverLetterField(fallbackProposal);
+      fillCoverLetterField(fallbackProposal, 1);
       showNotification('Basic proposal generated (AI unavailable)', 'warning');
     }
   } else {
@@ -1307,14 +1329,12 @@ ${freelancerName}`;
 
 I usually focus on getting things done right the first time and keeping you updated along the way. I'm pretty flexible with timelines and can start whenever you need me.
 
-What's the most important part of this project for you? And do you prefer to chat through Upwork messages or would you rather hop on a quick call to discuss details?
-
 Looking forward to working with you!
 
 Thanks,
 ${freelancerName}`;
     
-    fillCoverLetterField(genericProposal);
+    fillCoverLetterField(genericProposal, 0);
     showNotification('Generic proposal generated (no job description found)', 'warning');
   }
 }
