@@ -649,13 +649,7 @@ I usually focus on getting things done right the first time and keeping you upda
 }
 
 async function generateWithOpenAI({ apiKey, model, temperature, jobTitle, jobDescription, customPrompt, yourName }) {
-  // Optional guidance based on keywords
-  const lower = jobDescription.toLowerCase();
-  const extraGuidance = [];
-  if (/(wordpress|elementor)/.test(lower)) {
-    extraGuidance.push('If relevant, include 1 short line with 2–3 portfolio links (placeholders allowed).');
-  }
-  const optionalGuidance = extraGuidance.length ? `\n- ${extraGuidance.join('\n- ')}` : '';
+  // No optional guidance for portfolio links
 
   const systemMessage = 'You are an expert Upwork freelancer. Write proposals that are strictly tailored to the provided job description. Your proposal must reflect the client\'s language, mirror their goals, and map experience directly to the stated requirements and keywords. Avoid generic claims or boilerplate. Keep it professional, outcome-focused, and easy to skim.';
   const userMessage = `Write a tailored Upwork proposal for this job. Use the client's own wording where appropriate.
@@ -678,8 +672,7 @@ STRICT REQUIREMENTS:
 - Do NOT include KPIs/metrics or promise specific numbers unless the job description explicitly requests KPIs/metrics.
 - Length: 220–340 words total.
 - Sign off as ${yourName}.
-- Absolutely NO generic filler (e.g., "I have relevant experience" without specifics).
-${optionalGuidance}`;
+- Absolutely NO generic filler (e.g., "I have relevant experience" without specifics).`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -702,11 +695,13 @@ ${optionalGuidance}`;
     throw new Error(`OpenAI API error: ${response.status} ${err}`);
   }
   const data = await response.json();
-  const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content ? data.choices[0].message.content : '';
+  let content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content ? data.choices[0].message.content : '';
   if (!content) {
     throw new Error('Empty response from OpenAI');
   }
-  return content.trim();
+  // Strip any Portfolio Links blocks if model adds them
+  content = content.replace(/\n?Portfolio Links?:[\s\S]*$/i, '').trim();
+  return content;
 }
 
 // Function to generate answers for additional questions
