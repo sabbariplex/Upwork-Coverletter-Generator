@@ -23,7 +23,17 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Upwork Cover Letter Generator"
+    "default_title": "Upwork Cover Letter Generator",
+    "default_icon": {
+      "16": "upwork.png",
+      "32": "upwork.png"
+    }
+  },
+  "icons": {
+    "16": "upwork.png",
+    "32": "upwork.png",
+    "48": "upwork.png",
+    "128": "upwork.png"
   },
   "web_accessible_resources": [
     {
