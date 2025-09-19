@@ -187,10 +187,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
         
         // Generate cover letter
-    generateCoverLetter(request.jobTitle, request.jobDescription)
-      .then(coverLetter => {
+        generateCoverLetter(request.jobTitle, request.jobDescription)
+          .then(async coverLetter => {
             // Track usage after successful generation
-            trackUsage();
+            await trackUsage();
             console.log('Proposal generated successfully');
             sendResponse({ success: true, coverLetter, usage: userUsage });
           })
@@ -208,6 +208,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   if (request.action === 'getUsage') {
     console.log('Sending usage info:', userUsage);
+    console.log('Usage details - proposalsUsed:', userUsage.proposalsUsed, 'subscriptionStatus:', userUsage.subscriptionStatus);
     sendResponse({ success: true, usage: userUsage });
     return true;
   }
@@ -229,9 +230,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         // Generate question answers
         generateQuestionAnswers(request.questions, request.jobTitle, request.jobDescription)
-          .then(answers => {
+          .then(async answers => {
             // Track usage after successful generation
-            trackUsage();
+            await trackUsage();
             console.log('Question answers generated successfully');
             sendResponse({ success: true, answers, usage: userUsage });
           })
@@ -292,8 +293,11 @@ async function checkUsageLimits() {
 }
 
 async function trackUsage() {
+  console.log('Tracking usage - before increment:', userUsage.proposalsUsed);
   userUsage.proposalsUsed++;
+  console.log('Tracking usage - after increment:', userUsage.proposalsUsed);
   await saveUserUsage();
+  console.log('Usage saved to storage:', userUsage);
   
   // Send usage data to your backend
   try {
@@ -306,6 +310,7 @@ async function trackUsage() {
         timestamp: Date.now()
       })
     });
+    console.log('Usage synced with backend successfully');
   } catch (error) {
     console.log('Failed to sync usage with backend:', error);
   }

@@ -171,8 +171,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // Function to load usage information
   function loadUsageInfo() {
     chrome.runtime.sendMessage({action: 'getUsage'}, function(response) {
+      console.log('Popup received usage response:', response);
       if (response && response.success) {
         const usage = response.usage;
+        console.log('Usage data:', usage);
+        console.log('Proposals used:', usage.proposalsUsed);
         document.getElementById('proposals-used').textContent = usage.proposalsUsed || 0;
         document.getElementById('proposal-limit').textContent = usage.subscriptionStatus === 'premium' ? '∞' : '50';
         
@@ -189,6 +192,8 @@ document.addEventListener('DOMContentLoaded', function() {
           generateBtn.textContent = 'Upgrade to Generate';
           generateBtn.style.background = 'linear-gradient(135deg, #f56565, #e53e3e)';
         }
+      } else {
+        console.error('Failed to get usage info:', response);
       }
     });
   }

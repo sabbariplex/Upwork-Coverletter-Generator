@@ -676,6 +676,11 @@ function detectAdditionalQuestions() {
               text.toLowerCase().includes('tell') || 
               text.toLowerCase().includes('share') || 
               text.toLowerCase().includes('provide') || 
+              text.toLowerCase().includes('rate your') || 
+              text.toLowerCase().includes('on a scale') || 
+              text.toLowerCase().includes('please rate') || 
+              text.toLowerCase().includes('rate your expertise') || 
+              text.toLowerCase().includes('expertise in') || 
               text.toLowerCase().includes('experience') || 
               text.toLowerCase().includes('approach') || 
               text.toLowerCase().includes('timeline') || 
@@ -750,6 +755,11 @@ function detectAdditionalQuestions() {
               parentText.toLowerCase().includes('tell') || 
               parentText.toLowerCase().includes('share') || 
               parentText.toLowerCase().includes('provide') || 
+              parentText.toLowerCase().includes('rate your') || 
+              parentText.toLowerCase().includes('on a scale') || 
+              parentText.toLowerCase().includes('please rate') || 
+              parentText.toLowerCase().includes('rate your expertise') || 
+              parentText.toLowerCase().includes('expertise in') || 
               parentText.toLowerCase().includes('experience') || 
               parentText.toLowerCase().includes('approach') || 
               parentText.toLowerCase().includes('timeline') || 
@@ -833,7 +843,37 @@ function detectAdditionalQuestions() {
         questionText.toLowerCase().includes('share') ||
         questionText.toLowerCase().includes('provide') ||
         questionText.toLowerCase().includes('briefly') ||
-        questionText.toLowerCase().includes('in your own words');
+        questionText.toLowerCase().includes('in your own words') ||
+        questionText.toLowerCase().includes('rate your') ||
+        questionText.toLowerCase().includes('on a scale') ||
+        questionText.toLowerCase().includes('please rate') ||
+        questionText.toLowerCase().includes('rate your expertise') ||
+        questionText.toLowerCase().includes('expertise in') ||
+        questionText.toLowerCase().includes('experience with') ||
+        questionText.toLowerCase().includes('familiar with') ||
+        questionText.toLowerCase().includes('proficient in') ||
+        questionText.toLowerCase().includes('skilled in') ||
+        questionText.toLowerCase().includes('knowledge of') ||
+        questionText.toLowerCase().includes('background in') ||
+        questionText.toLowerCase().includes('qualifications') ||
+        questionText.toLowerCase().includes('capabilities') ||
+        questionText.toLowerCase().includes('abilities') ||
+        questionText.toLowerCase().includes('strengths') ||
+        questionText.toLowerCase().includes('skills') ||
+        questionText.toLowerCase().includes('expertise') ||
+        questionText.toLowerCase().includes('proficiency') ||
+        questionText.toLowerCase().includes('competency') ||
+        questionText.toLowerCase().includes('mastery') ||
+        questionText.toLowerCase().includes('familiarity') ||
+        questionText.toLowerCase().includes('understanding') ||
+        questionText.toLowerCase().includes('knowledge') ||
+        questionText.toLowerCase().includes('experience') ||
+        questionText.toLowerCase().includes('background') ||
+        questionText.toLowerCase().includes('qualification') ||
+        questionText.toLowerCase().includes('capability') ||
+        questionText.toLowerCase().includes('ability') ||
+        questionText.toLowerCase().includes('strength') ||
+        questionText.toLowerCase().includes('skill');
       
       if (!isCoverLetterByText && looksLikeQuestion) {
         console.log(`Found question ${questions.length + 1}: "${questionText.substring(0, 100)}..." (textarea)`);
