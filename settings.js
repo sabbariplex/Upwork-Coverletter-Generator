@@ -317,31 +317,38 @@ Question: Which decisions will this dashboard support weekly?`
 
 // AI Prompts Functions
 
-function previewTemplate() {
+async function previewTemplate() {
   const templateType = document.getElementById('prompt-template').value;
   const previewDiv = document.getElementById('template-preview');
   const contentDiv = document.getElementById('template-content');
   
-  if (templateType === 'custom') {
-    const customPrompt = document.getElementById('custom-ai-prompt').value.trim();
-    if (customPrompt) {
-      contentDiv.innerHTML = `<pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px;">${customPrompt}</pre>`;
-    } else {
-      contentDiv.innerHTML = '<p style="color: #666; font-style: italic;">No custom prompt entered yet.</p>';
-    }
-  } else if (AI_PROMPTS_TEMPLATES[templateType]) {
-    const template = AI_PROMPTS_TEMPLATES[templateType];
+  // Always show meta + AI-generated body template based on current meta prompt
+  const key = metaPromptStorageKey(templateType);
+  const defaults = AI_PROMPTS_TEMPLATES[templateType] || AI_PROMPTS_TEMPLATES['universal'];
+  let stored = {};
+  try {
+    stored = await chrome.storage.local.get([key]);
+  } catch (e) {
+    stored = {};
+  }
+  const metaPrompt = (stored && stored[key]) ? stored[key] : (defaults ? defaults.metaPrompt : '');
+
+  // Show loading state
+  contentDiv.innerHTML = `<p style="color:#666">Generating template preview...</p>`;
+
+  chrome.runtime.sendMessage({ action: 'generateTemplatePreview', templateType }, function(resp) {
+    const templateBody = (resp && resp.success && resp.template) ? resp.template : (defaults ? defaults.template : '');
     contentDiv.innerHTML = `
       <div style="margin-bottom: 15px;">
         <h5>Meta Prompt:</h5>
-        <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px; font-size: 12px;">${template.metaPrompt}</pre>
+        <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px; font-size: 12px;">${metaPrompt}</pre>
       </div>
       <div>
-        <h5>Template:</h5>
-        <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px;">${template.template}</pre>
+        <h5>AI-Derived Body Template:</h5>
+        <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px;">${templateBody}</pre>
       </div>
     `;
-  }
+  });
   
   previewDiv.style.display = 'block';
 }

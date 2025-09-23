@@ -167,6 +167,46 @@ Best regards,
 [Your Name]`;
 }
 
+// Replace common signature placeholders with the saved user name
+function replaceNamePlaceholders(text, name) {
+  try {
+    const signatureName = name || 'Your Name';
+    const patterns = [
+      /\[Your Name\]/gi,
+      /\{Your Name\}/gi,
+      /<Your Name>/gi,
+      /\[YourName\]/gi,
+      /\{YourName\}/gi,
+      /\[Name\]/gi,
+      /\{Name\}/gi,
+      /<Name>/gi
+    ];
+    return patterns.reduce((acc, rx) => acc.replace(rx, signatureName), text || '');
+  } catch (e) {
+    return text;
+  }
+}
+
+// Ensure that after "Thanks," or "Thank you," the name starts on the next line
+function escapeRegExp(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function enforceThanksSignatureNewline(text, name) {
+  try {
+    const signatureName = name || 'Your Name';
+    const escapedName = escapeRegExp(signatureName);
+    const nameGroup = `(?:${escapedName}|\\[Your Name\\]|\\{Your Name\\}|<Your Name>|\\[YourName\\]|\\{YourName\\}|\\[Name\\]|\\{Name\\}|<Name>)`;
+    let out = text || '';
+    // Thanks,/Thank you, followed by name on same line -> newline before name
+    const rx = new RegExp(`\\b(Thanks|Thank you),\\s*${nameGroup}`, 'gi');
+    out = out.replace(rx, (_m, thanks) => `${thanks},\n${signatureName}`);
+    return out;
+  } catch (e) {
+    return text;
+  }
+}
+
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Background received message:', request.action);
@@ -246,6 +286,47 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: false, error: 'Failed to check usage limits' });
       });
     return true; // Keep message channel open for async response
+  }
+
+  if (request.action === 'generateTemplatePreview') {
+    (async () => {
+      try {
+        const templateType = request.templateType || 'universal';
+        const settings = await chrome.storage.local.get(['openaiApiKey', 'openaiModel', 'openaiTemperature']);
+        const overrideKey = `metaPromptOverride_${templateType}`;
+        const stored = await chrome.storage.local.get([overrideKey]);
+        const defaults = AI_PROMPTS_TEMPLATES[templateType] || AI_PROMPTS_TEMPLATES['universal'];
+        const metaPrompt = (stored && stored[overrideKey]) ? stored[overrideKey] : (defaults ? defaults.metaPrompt : '');
+
+        let previewTemplateBody = '';
+
+        if (settings.openaiApiKey && settings.openaiApiKey.trim() && metaPrompt && metaPrompt.trim()) {
+          const prompt = `${metaPrompt.trim()}\n\nInstructions:\n- Infer a generic proposal body TEMPLATE structure that follows the meta rules above.\n- Do not include job-specific details; use placeholders in [brackets].\n- 6–8 lines total; one sentence per line; explicit newline after each line.\n- No headings, bullets, or labels; return ONLY the template text.\n- Indent each line by two spaces.`;
+          try {
+            previewTemplateBody = await generateWithOpenAI({
+              apiKey: settings.openaiApiKey.trim(),
+              model: (settings.openaiModel && settings.openaiModel.trim()) || DEFAULT_CONFIG.DEFAULT_MODEL,
+              temperature: typeof settings.openaiTemperature === 'number' ? settings.openaiTemperature : DEFAULT_CONFIG.TEMPERATURE,
+              jobTitle: '',
+              jobDescription: '',
+              customPrompt: prompt,
+              yourName: ''
+            });
+          } catch (e) {
+            // fall back to default template on error
+            previewTemplateBody = defaults && defaults.template ? defaults.template : 'I have [X] years...';
+          }
+        } else {
+          // No API key or no meta: fallback to default template
+          previewTemplateBody = defaults && defaults.template ? defaults.template : 'I have [X] years...';
+        }
+
+        sendResponse({ success: true, template: previewTemplateBody });
+      } catch (err) {
+        sendResponse({ success: false, error: err && err.message ? err.message : String(err) });
+      }
+    })();
+    return true;
   }
 
   if (request.action === 'resetUsage') {
@@ -362,8 +443,8 @@ function generateLocalProposalWithCustomPrompt(jobTitle, jobDescription, setting
   // Use the custom prompt as the base for the proposal
   let proposal = customPrompt;
   
-  // Replace [Your Name] with actual name
-  proposal = proposal.replace(/\[Your Name\]/g, settings.yourName || 'Your Name');
+  // Replace common name placeholders with actual name
+  proposal = replaceNamePlaceholders(proposal, settings.yourName);
   
   
   // Clean up any remaining placeholders
@@ -371,6 +452,8 @@ function generateLocalProposalWithCustomPrompt(jobTitle, jobDescription, setting
   
   // Ensure proper formatting
   proposal = proposal.trim();
+  // Ensure proper newline after Thanks/Thank you before name
+  proposal = enforceThanksSignatureNewline(proposal, settings.yourName);
   
   console.log('Final generated proposal:', proposal);
   
@@ -419,6 +502,9 @@ function generateLocalProposal(jobTitle, jobDescription, settings) {
   proposal += `I'm available for a quick call to discuss the details further, or we can continue the conversation through Upwork messages. Looking forward to working with you!\n\n`;
   
   proposal += `Best regards,\n${settings.yourName || 'Your Name'}`;
+  
+  // Ensure newline after Thanks/Thank you before name if present
+  proposal = enforceThanksSignatureNewline(proposal, settings.yourName);
   
   return proposal;
 }
@@ -511,28 +597,42 @@ async function generateCoverLetter(jobTitle, jobDescription) {
     if (settings.aiPromptsEnabled !== false && isAIMode) {
       const templateType = settings.promptTemplate || 'universal';
       
-      if (templateType === 'custom' && settings.customAIPrompt && settings.customAIPrompt.trim()) {
-        // Use custom AI prompt
-        prompt = settings.customAIPrompt.trim().replace(/\[Your Name\]/g, settings.yourName || 'Your Name');
-      } else if (AI_PROMPTS_TEMPLATES[templateType]) {
-        // Use AI prompts template
+      if (AI_PROMPTS_TEMPLATES[templateType]) {
+        // Use AI prompts template (including 'custom'). For 'custom', allow user's body override.
         const template = AI_PROMPTS_TEMPLATES[templateType];
-        // Load per-template meta override from storage
         const overrideKey = `metaPromptOverride_${templateType}`;
         const stored = await chrome.storage.local.get([overrideKey]);
-        const metaPrompt = (stored && stored[overrideKey]) ? stored[overrideKey] : template.metaPrompt;
-        const templateText = template.template;
-        
-        // Create the full prompt with job context
-        prompt = `${metaPrompt}
+        // Only use saved meta prompts; do NOT fall back to defaults
+        const metaPrompt = (stored && stored[overrideKey]) ? stored[overrideKey] : '';
+        // If a saved Meta Prompt exists, omit built-in body and have AI derive structure from meta rules
+        if (metaPrompt && metaPrompt.trim()) {
+          const metaSection = `${metaPrompt.trim()}\n\n`;
+          prompt = `${metaSection}Job Title: ${jobTitle}
+Job Description: ${jobDescription}
 
-Job Title: ${jobTitle}
+Instructions:
+- Do not repeat or quote the meta rules.
+- First, infer a compact body template that fits these rules and this job (e.g., Opening Line, Website/URL Request, Approach, Credibility, Closing).
+- Then write the final proposal using that inferred structure.
+- Output ONLY the final proposal text (no headings, no bullets, no labels).
+- Write 5–7 lines total; one sentence per line; insert an explicit newline after each line.
+- Indent each line of the final proposal by two spaces.`;
+        } else {
+          // No saved Meta Prompt: include the template body (custom body for 'custom' when provided)
+          const hasUserCustomBody = templateType === 'custom' && settings.customAIPrompt && settings.customAIPrompt.trim();
+          const templateBody = hasUserCustomBody ? settings.customAIPrompt.trim() : template.template;
+          const metaSection = '';
+          prompt = `${metaSection}Job Title: ${jobTitle}
 Job Description: ${jobDescription}
 
 Generate a proposal using this template:
-${templateText}
+${templateBody}
 
-Replace placeholders with specific details from the job. Keep it under 8 lines.`;
+Replace placeholders with specific details from the job. Write 5–7 lines total; one sentence per line; insert an explicit newline after each line. Indent each line of the final proposal by two spaces.`;
+        }
+
+        // Replace name placeholder if present
+        prompt = prompt.replace(/\[Your Name\]/g, settings.yourName || 'Your Name');
       } else {
         // Fallback to default
         prompt = generateCustomPrompt(jobTitle, jobDescription, settings);
@@ -559,7 +659,7 @@ Replace placeholders with specific details from the job. Keep it under 8 lines.`
     // If AI mode and API key exists, try OpenAI first
     if (isAIMode && settings.openaiApiKey && settings.openaiApiKey.trim()) {
       try {
-        const proposalViaOpenAI = await generateWithOpenAI({
+        let proposalViaOpenAI = await generateWithOpenAI({
           apiKey: settings.openaiApiKey.trim(),
           model: (settings.openaiModel && settings.openaiModel.trim()) || DEFAULT_CONFIG.DEFAULT_MODEL,
           temperature: typeof settings.openaiTemperature === 'number' ? settings.openaiTemperature : DEFAULT_CONFIG.TEMPERATURE,
@@ -568,6 +668,9 @@ Replace placeholders with specific details from the job. Keep it under 8 lines.`
           customPrompt: prompt,
           yourName: settings.yourName || 'Your Name'
         });
+        // Replace name placeholders in the model output before returning
+        proposalViaOpenAI = replaceNamePlaceholders(proposalViaOpenAI || '', settings.yourName);
+        proposalViaOpenAI = enforceThanksSignatureNewline(proposalViaOpenAI, settings.yourName);
         return proposalViaOpenAI;
       } catch (openAiErr) {
         console.warn('OpenAI generation failed, will try backend/local fallback:', openAiErr);
@@ -611,9 +714,9 @@ Replace placeholders with specific details from the job. Keep it under 8 lines.`
       if (data.success && data.proposal) {
         let proposal = data.proposal.trim();
       
-      // Replace [Your Name] placeholder with actual name from settings
-      const signatureName = settings.yourName || 'Your Name';
-      proposal = proposal.replace(/\[Your Name\]/g, signatureName);
+      // Replace signature placeholders with actual name from settings
+      proposal = replaceNamePlaceholders(proposal, settings.yourName);
+      proposal = enforceThanksSignatureNewline(proposal, settings.yourName);
       
         console.log('Generated proposal via backend:', proposal);
         return proposal;
@@ -649,35 +752,15 @@ Replace placeholders with specific details from the job. Keep it under 8 lines.`
 
 I usually focus on getting things done right the first time and keeping you updated along the way. I'm pretty flexible with timelines and can start whenever you need me.
 
-`;
+Best regards,
+${signatureName}`;
   }
 }
 
 async function generateWithOpenAI({ apiKey, model, temperature, jobTitle, jobDescription, customPrompt, yourName }) {
-  // No optional guidance for portfolio links
-
-  const systemMessage = 'You are an expert Upwork freelancer. Write proposals that are strictly tailored to the provided job description. Your proposal must reflect the client\'s language, mirror their goals, and map experience directly to the stated requirements and keywords. Avoid generic claims or boilerplate. Keep it professional, outcome-focused, and easy to skim.';
-  const userMessage = `Write a tailored Upwork proposal for this job. Use the client's own wording where appropriate.
-
-JOB TITLE:
-${jobTitle}
-
-JOB DESCRIPTION (verbatim):
-${jobDescription}
-
-STYLE/TONE (optional):
-${customPrompt || '(no custom style provided)'}
-
-STRICT REQUIREMENTS:
-- Open with 1–2 sentences that restate the client goal using their phrasing.
-- Include 3–5 bullets that map MY experience to SPECIFIC requirements/keywords from the job description.
-  • In each bullet, QUOTE 1 short phrase from the description in double quotes ("") and explain how I address it.
-- Add a brief 3–4 step plan referencing the client context and constraints contained in the description.
-- Ask 1–2 focused clarifying questions that would affect scope/timeline.
-- Do NOT include KPIs/metrics or promise specific numbers unless the job description explicitly requests KPIs/metrics.
-- Length: 220–340 words total.
-- Sign off as ${yourName}.
-- Absolutely NO generic filler (e.g., "I have relevant experience" without specifics).`;
+  // Use the constructed prompt (Meta Prompt + Template + Job context) directly
+  const systemMessage = 'Follow the user\'s instructions exactly. Do not add extra sections or deviate from the requested structure. Keep responses concise and compliant with the provided rules.';
+  const userMessage = customPrompt;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
