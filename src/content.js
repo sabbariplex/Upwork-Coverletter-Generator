@@ -1,11 +1,12 @@
 // Content script for Upwork Cover Letter Generator
+import debug from './utils/debug.js';
 // Prevent duplicate execution
 if (window.upworkCoverLetterGeneratorLoaded) {
-  console.log('Upwork Cover Letter Generator already loaded, skipping...');
+  debug.log('Upwork Cover Letter Generator already loaded, skipping...');
 } else {
   window.upworkCoverLetterGeneratorLoaded = true;
 
-console.log('Upwork Cover Letter Generator loaded');
+debug.log('Upwork Cover Letter Generator loaded');
 
   // Add error handling wrapper
   try {
@@ -20,7 +21,7 @@ if (typeof window.__proposalGenerationInProgress === 'undefined') {
 function expandTruncatedDescription() {
   const moreButton = document.querySelector('.air3-truncation-btn');
   if (moreButton && moreButton.getAttribute('aria-expanded') === 'false') {
-    console.log('Expanding truncated description...');
+    debug.log('Expanding truncated description...');
     moreButton.click();
     return true;
   }
@@ -45,7 +46,7 @@ function extractFromLdJson() {
       } catch (_) {}
     }
   } catch (err) {
-    console.log('ld+json parse error', err);
+    debug.log('ld+json parse error', err);
   }
   return null;
 }
@@ -76,7 +77,7 @@ async function fetchAndParseJobDescription() {
     const link = document.querySelector('[data-test="open-original-posting"], a[href*="/jobs/~"], a[href*="/job/"]');
     if (!link || !link.href) return null;
     const url = link.href.startsWith('http') ? link.href : (location.origin + link.getAttribute('href'));
-    console.log('Fetching original posting:', url);
+    debug.log('Fetching original posting:', url);
     const res = await fetch(url, { credentials: 'include' });
     if (!res.ok) return null;
     const html = await res.text();
@@ -115,7 +116,7 @@ async function fetchAndParseJobDescription() {
     }
     return best.text || null;
   } catch (e) {
-    console.log('Off-page fetch failed', e);
+    debug.log('Off-page fetch failed', e);
     return null;
   }
 }
@@ -142,7 +143,7 @@ function cacheDescription(text) {
 // Function to extract job description from Upwork page
 function extractJobDescription() {
   try {
-    console.log('Attempting to extract job description...');
+    debug.log('Attempting to extract job description...');
     
     // First try to expand any truncated descriptions
     expandTruncatedDescription();
@@ -151,7 +152,7 @@ function extractJobDescription() {
   const jobDetailsText = document.querySelector('.job-details-content .text-body-sm');
   if (jobDetailsText && jobDetailsText.textContent && jobDetailsText.textContent.trim().length > 10) {
     const text = jobDetailsText.textContent.trim();
-    console.log('Found job description in .job-details-content .text-body-sm:', text.substring(0, 100) + '...');
+    debug.log('Found job description in .job-details-content .text-body-sm:', text.substring(0, 100) + '...');
     return text;
   }
 
@@ -159,7 +160,7 @@ function extractJobDescription() {
   const truncatedDesc = document.querySelector('.description .air3-truncation span span');
   if (truncatedDesc && truncatedDesc.textContent && truncatedDesc.textContent.trim().length > 10) {
     const text = truncatedDesc.textContent.trim();
-    console.log('Found truncated job description:', text.substring(0, 100) + '...');
+    debug.log('Found truncated job description:', text.substring(0, 100) + '...');
     return text;
   }
 
@@ -167,7 +168,7 @@ function extractJobDescription() {
   const jobDetailsContent = document.querySelector('.job-details-content');
   if (jobDetailsContent && jobDetailsContent.textContent && jobDetailsContent.textContent.trim().length > 50) {
     const text = jobDetailsContent.textContent.trim();
-    console.log('Found job description in .job-details-content:', text.substring(0, 100) + '...');
+    debug.log('Found job description in .job-details-content:', text.substring(0, 100) + '...');
     return text;
   }
 
@@ -175,7 +176,7 @@ function extractJobDescription() {
   const feDetails = document.querySelector('.fe-job-details');
   if (feDetails && feDetails.textContent && feDetails.textContent.trim().length > 50) {
     const text = feDetails.textContent.trim();
-    console.log('Found job description in .fe-job-details:', text.substring(0, 100) + '...');
+    debug.log('Found job description in .fe-job-details:', text.substring(0, 100) + '...');
     return text;
   }
 
@@ -216,19 +217,19 @@ function extractJobDescription() {
       '.job-details div'
     ];
     
-    console.log('Trying selectors...');
+    debug.log('Trying selectors...');
   for (const selector of selectors) {
     const element = document.querySelector(selector);
     if (element && element.textContent && element.textContent.trim()) {
         const text = element.textContent.trim();
-        console.log(`Found text with selector "${selector}":`, text.substring(0, 100) + '...');
+        debug.log(`Found text with selector "${selector}":`, text.substring(0, 100) + '...');
         
         // Check if this looks like a job description (has reasonable length and content)
         if (text.length > 80 && text.length < 8000 && 
             !text.includes('Apply Now') && !text.includes('Submit Proposal') &&
             !text.includes('Posted') && !text.includes('Hourly range') &&
             !text.includes('Skills and expertise') && !text.includes('View job posting')) {
-          console.log(`Using text from selector "${selector}" as job description`);
+          debug.log(`Using text from selector "${selector}" as job description`);
           return text;
         }
       }
@@ -237,21 +238,21 @@ function extractJobDescription() {
     // Fallback 1: ld+json JobPosting
     const ld = extractFromLdJson();
     if (ld && ld.trim().length > 50) {
-      console.log('Using description from ld+json JobPosting');
+      debug.log('Using description from ld+json JobPosting');
       return ld.trim();
     }
 
     // Fallback 2: classless heuristic
     const heur = extractByHeuristics();
     if (heur) {
-      console.log('Using description from heuristic extractor');
+      debug.log('Using description from heuristic extractor');
       return heur;
     }
 
     // Fallback 3: none found
     return null;
   } catch (error) {
-    console.error('Error extracting job description:', error);
+    debug.error('Error extracting job description:', error);
   return null;
   }
 }
@@ -280,17 +281,17 @@ function extractJobDescription() {
 // Function to extract freelancer name from profile or settings
 async function extractFreelancerName() {
   try {
-    console.log('Attempting to extract freelancer name...');
+    debug.log('Attempting to extract freelancer name...');
     
     // First try to get from user settings
     try {
       const result = await chrome.storage.local.get(['freelancerName']);
       if (result.freelancerName && result.freelancerName.trim()) {
-        console.log('Found freelancer name from settings:', result.freelancerName);
+        debug.log('Found freelancer name from settings:', result.freelancerName);
         return result.freelancerName.trim();
       }
     } catch (error) {
-      console.log('Could not get freelancer name from settings:', error);
+      debug.log('Could not get freelancer name from settings:', error);
     }
     
     const freelancerNameSelectors = [
@@ -349,7 +350,7 @@ async function extractFreelancerName() {
       const element = document.querySelector(selector);
       if (element && element.textContent.trim()) {
         const name = element.textContent.trim();
-        console.log(`Found freelancer name with selector "${selector}":`, name);
+        debug.log(`Found freelancer name with selector "${selector}":`, name);
         // Clean up the name (remove extra whitespace, titles, etc.)
         const cleanName = name.replace(/\s+/g, ' ').trim();
         return cleanName;
@@ -357,7 +358,7 @@ async function extractFreelancerName() {
     }
     
     // Fallback: look for any text that might be a freelancer name
-    console.log('Trying fallback methods for freelancer name...');
+    debug.log('Trying fallback methods for freelancer name...');
     
     // Look for text patterns that might be names in profile areas
     const profileElements = document.querySelectorAll('[class*="profile"], [class*="user"], [class*="account"], [class*="menu"]');
@@ -374,26 +375,26 @@ async function extractFreelancerName() {
           !text.includes('Freelancer') &&
           !text.includes('Profile') &&
           !text.includes('Account')) {
-        console.log(`Found potential freelancer name:`, text);
+        debug.log(`Found potential freelancer name:`, text);
         return text;
       }
     }
     
-    console.log('No freelancer name found, using default');
-    console.log('Available text elements that might contain name:');
+    debug.log('No freelancer name found, using default');
+    debug.log('Available text elements that might contain name:');
     
     // Debug: show some text elements that might contain the name
     const debugElements = document.querySelectorAll('[class*="user"], [class*="profile"], [class*="menu"], [class*="avatar"]');
     for (let i = 0; i < Math.min(5, debugElements.length); i++) {
       const text = debugElements[i].textContent.trim();
       if (text && text.length > 0 && text.length < 100) {
-        console.log(`Debug element ${i}:`, text);
+        debug.log(`Debug element ${i}:`, text);
       }
     }
     
     return 'Your Name';
   } catch (error) {
-    console.error('Error extracting freelancer name:', error);
+    debug.error('Error extracting freelancer name:', error);
     return 'Your Name';
   }
 }
@@ -401,7 +402,7 @@ async function extractFreelancerName() {
 // Function to extract job title
 function extractJobTitle() {
   try {
-    console.log('Attempting to extract job title...');
+    debug.log('Attempting to extract job title...');
     
   const titleSelectors = [
     // Upwork specific selectors
@@ -423,12 +424,12 @@ function extractJobTitle() {
     const element = document.querySelector(selector);
     if (element && element.textContent.trim()) {
         const title = element.textContent.trim();
-        console.log(`Found title with selector "${selector}":`, title);
+        debug.log(`Found title with selector "${selector}":`, title);
         
         // Skip if it's a button text or common UI elements
         if (title.includes('Submit') || title.includes('Apply') || title.includes('Proposal') || 
             title.includes('Button') || title.length < 10) {
-          console.log('Skipping button text:', title);
+          debug.log('Skipping button text:', title);
           continue;
         }
         
@@ -452,14 +453,14 @@ function extractJobTitle() {
   }
   
   if (bestTitle) {
-    console.log('Found best title:', bestTitle);
+    debug.log('Found best title:', bestTitle);
     return bestTitle;
   }
   
-    console.log('No specific title found, using default');
+    debug.log('No specific title found, using default');
     return 'Job Application';
   } catch (error) {
-    console.error('Error extracting job title:', error);
+    debug.error('Error extracting job title:', error);
   return 'Job Application';
   }
 }
@@ -537,15 +538,15 @@ function isValidJobDescription(text) {
 function detectAdditionalQuestions() {
   const questions = [];
   
-  console.log('Starting question detection...');
+  debug.log('Starting question detection...');
   
   // Find all textarea elements that are likely question answer fields
   const textareas = document.querySelectorAll('textarea');
-  console.log(`Found ${textareas.length} textarea elements`);
+  debug.log(`Found ${textareas.length} textarea elements`);
   
   // Log all textareas for debugging
   textareas.forEach((textarea, index) => {
-    console.log(`Textarea ${index + 1}:`, {
+    debug.log(`Textarea ${index + 1}:`, {
       id: textarea.id,
       name: textarea.name,
       placeholder: textarea.placeholder,
@@ -566,8 +567,8 @@ function detectAdditionalQuestions() {
   const questionsArea = document.querySelector('.fe-proposal-job-questions') ||
                        document.querySelector('.questions-area');
   
-  console.log('Additional details section found:', !!additionalDetailsSection);
-  console.log('Questions area found:', !!questionsArea);
+  debug.log('Additional details section found:', !!additionalDetailsSection);
+  debug.log('Questions area found:', !!questionsArea);
   
   textareas.forEach((textarea, index) => {
     // Skip if it's the main cover letter field - more comprehensive check
@@ -614,13 +615,13 @@ function detectAdditionalQuestions() {
       })();
     
     if (isCoverLetterField) {
-      console.log(`Skipping cover letter field: ${textarea.name || textarea.id || textarea.placeholder || 'unknown'}`);
+      debug.log(`Skipping cover letter field: ${textarea.name || textarea.id || textarea.placeholder || 'unknown'}`);
       return;
     }
     
     // Skip if element is hidden or disabled
     if (textarea.offsetParent === null || textarea.disabled) {
-      console.log(`Skipping hidden/disabled textarea: ${textarea.name || textarea.id}`);
+      debug.log(`Skipping hidden/disabled textarea: ${textarea.name || textarea.id}`);
       return;
     }
     
@@ -628,12 +629,12 @@ function detectAdditionalQuestions() {
     if (questionsArea) {
       const isInQuestionsArea = questionsArea.contains(textarea);
       if (!isInQuestionsArea) {
-        console.log(`Skipping textarea outside questions area: ${textarea.name || textarea.id || 'unknown'}`);
+        debug.log(`Skipping textarea outside questions area: ${textarea.name || textarea.id || 'unknown'}`);
         return;
       }
     } else {
       // If no questions area found, skip all textareas
-      console.log(`No questions area found, skipping all textareas`);
+      debug.log(`No questions area found, skipping all textareas`);
       return;
     }
     
@@ -644,13 +645,13 @@ function detectAdditionalQuestions() {
     const labelElement = document.querySelector(`label[for="${textarea.id}"]`);
     if (labelElement) {
       questionText = labelElement.textContent.trim();
-      console.log(`Found label for textarea ${index + 1}: "${questionText}"`);
+      debug.log(`Found label for textarea ${index + 1}: "${questionText}"`);
       
       // Skip if this is clearly a cover letter field based on label
       if (questionText.toLowerCase().includes('cover') || 
           questionText.toLowerCase().includes('letter') || 
           questionText.toLowerCase().includes('proposal')) {
-        console.log(`Skipping cover letter field based on label: "${questionText}"`);
+        debug.log(`Skipping cover letter field based on label: "${questionText}"`);
         return;
       }
     }
@@ -661,7 +662,7 @@ function detectAdditionalQuestions() {
       while (currentElement && !questionText) {
         if (currentElement.tagName === 'LABEL') {
           questionText = currentElement.textContent.trim();
-          console.log(`Found label sibling for textarea ${index + 1}: "${questionText}"`);
+          debug.log(`Found label sibling for textarea ${index + 1}: "${questionText}"`);
         } else if (currentElement.textContent && currentElement.textContent.trim().length > 10) {
           // Check if this element contains question-like text
           const text = currentElement.textContent.trim();
@@ -728,7 +729,7 @@ function detectAdditionalQuestions() {
               text.toLowerCase().includes('priority') || 
               text.toLowerCase().includes('concern')) {
             questionText = text;
-            console.log(`Found question text sibling for textarea ${index + 1}: "${questionText}"`);
+            debug.log(`Found question text sibling for textarea ${index + 1}: "${questionText}"`);
           }
         }
         currentElement = currentElement.previousElementSibling;
@@ -807,7 +808,7 @@ function detectAdditionalQuestions() {
               parentText.toLowerCase().includes('priority') || 
               parentText.toLowerCase().includes('concern')) {
             questionText = parentText;
-            console.log(`Found question text in parent for textarea ${index + 1}: "${questionText}"`);
+            debug.log(`Found question text in parent for textarea ${index + 1}: "${questionText}"`);
           }
         }
         parentElement = parentElement.parentElement;
@@ -818,7 +819,7 @@ function detectAdditionalQuestions() {
     // Method 4: Use placeholder as fallback
     if (!questionText) {
       questionText = textarea.placeholder || `Question ${index + 1}`;
-      console.log(`Using placeholder for textarea ${index + 1}: "${questionText}"`);
+      debug.log(`Using placeholder for textarea ${index + 1}: "${questionText}"`);
     }
     
     // Only add if we found a meaningful question text and it's not a cover letter
@@ -876,7 +877,7 @@ function detectAdditionalQuestions() {
         questionText.toLowerCase().includes('skill');
       
       if (!isCoverLetterByText && looksLikeQuestion) {
-        console.log(`Found question ${questions.length + 1}: "${questionText.substring(0, 100)}..." (textarea)`);
+        debug.log(`Found question ${questions.length + 1}: "${questionText.substring(0, 100)}..." (textarea)`);
         questions.push({
           element: textarea,
           label: questionText,
@@ -885,31 +886,31 @@ function detectAdditionalQuestions() {
           required: textarea.required || false
         });
       } else {
-        console.log(`Skipping textarea - not a valid question: "${questionText.substring(0, 50)}..."`);
+        debug.log(`Skipping textarea - not a valid question: "${questionText.substring(0, 50)}..."`);
       }
     } else {
-      console.log(`Skipping textarea - no valid question text found`);
+      debug.log(`Skipping textarea - no valid question text found`);
     }
   });
   
   
-  console.log('Total questions detected:', questions.length);
+  debug.log('Total questions detected:', questions.length);
   return questions;
 }
 
 // Function to wait for page to be completely ready with all elements loaded
 function waitForPageToBeReady() {
   return new Promise((resolve) => {
-    console.log('Waiting for page to be completely ready...');
+    debug.log('Waiting for page to be completely ready...');
     
     // First wait for basic page load
     const waitForBasicLoad = () => {
       if (document.readyState === 'complete') {
-        console.log('Basic page load complete, waiting for dynamic content...');
+        debug.log('Basic page load complete, waiting for dynamic content...');
         waitForDynamicContent();
       } else {
         window.addEventListener('load', () => {
-          console.log('Basic page load complete, waiting for dynamic content...');
+          debug.log('Basic page load complete, waiting for dynamic content...');
           waitForDynamicContent();
         });
       }
@@ -954,21 +955,21 @@ function waitForPageToBeReady() {
         }
       });
       
-      console.log(`Found ${foundElements} form elements`);
+      debug.log(`Found ${foundElements} form elements`);
       
       // If we found form elements, wait a bit more for dynamic content
       if (foundElements > 0) {
         setTimeout(() => {
-          console.log('Form elements detected, waiting additional time for dynamic content...');
+          debug.log('Form elements detected, waiting additional time for dynamic content...');
           setTimeout(() => {
-            console.log('Page should be ready now');
+            debug.log('Page should be ready now');
             resolve();
           }, 5000); // Wait 5 more seconds for dynamic content
         }, 3000); // Wait 3 seconds after finding elements
       } else {
         // If no form elements found, wait a bit and try again
         setTimeout(() => {
-          console.log('No form elements found, retrying...');
+          debug.log('No form elements found, retrying...');
           waitForDynamicContent();
         }, 2000); // Increased retry delay
       }
@@ -1000,11 +1001,11 @@ async function generateQuestionAnswers(questions, jobTitle, jobDescription) {
     if (response && response.success) {
       return response.answers || [];
     } else {
-      console.error('Failed to generate question answers:', response?.error || 'Unknown error');
+      debug.error('Failed to generate question answers:', response?.error || 'Unknown error');
       return [];
     }
   } catch (error) {
-    console.error('Error generating question answers:', error);
+    debug.error('Error generating question answers:', error);
     return [];
   }
 }
@@ -1038,13 +1039,13 @@ function fillQuestionFields(questions, answers) {
           element.className?.includes('proposal');
         
         if (isCoverLetterField) {
-          console.log(`Skipping cover letter field when filling questions: ${element.name || element.id || element.placeholder || 'unknown'}`);
+          debug.log(`Skipping cover letter field when filling questions: ${element.name || element.id || element.placeholder || 'unknown'}`);
           return;
         }
         
         // Check if field already has long content (likely cover letter)
         if (element.value && element.value.trim().length > 50) {
-          console.log(`Skipping field with existing content (likely cover letter): "${element.value.substring(0, 50)}..."`);
+          debug.log(`Skipping field with existing content (likely cover letter): "${element.value.substring(0, 50)}..."`);
           return;
         }
         
@@ -1084,17 +1085,17 @@ function fillQuestionFields(questions, answers) {
           // element.dispatchEvent(new Event('blur', { bubbles: true }));
 
           filledCount++;
-          console.log(`Filled question ${index + 1}: "${question.label}"`);
+          debug.log(`Filled question ${index + 1}: "${question.label}"`);
         } catch (error) {
-          console.error(`Error filling question ${index + 1}:`, error);
+          debug.error(`Error filling question ${index + 1}:`, error);
         }
       } else {
-        console.warn(`Question element ${index + 1} is not available or visible`);
+        debug.warn(`Question element ${index + 1} is not available or visible`);
       }
     }
   });
   
-  console.log(`Successfully filled ${filledCount} out of ${questions.length} question fields`);
+  debug.log(`Successfully filled ${filledCount} out of ${questions.length} question fields`);
   return filledCount;
 }
 
@@ -1105,18 +1106,18 @@ function fillQuestionFieldsWithRetry(questions, answers, maxAttempts = 5) {
     
     const tryFill = () => {
       attempts++;
-      console.log(`Attempt ${attempts} to fill question fields...`);
+      debug.log(`Attempt ${attempts} to fill question fields...`);
       
       const filledCount = fillQuestionFields(questions, answers);
       
       if (filledCount === questions.length) {
-        console.log('All question fields filled successfully');
+        debug.log('All question fields filled successfully');
         resolve(true);
       } else if (attempts < maxAttempts) {
-        console.log(`Only filled ${filledCount}/${questions.length} fields, retrying in 3 seconds...`);
+        debug.log(`Only filled ${filledCount}/${questions.length} fields, retrying in 3 seconds...`);
         setTimeout(tryFill, 3000); // Increased delay between attempts
       } else {
-        console.log(`Max attempts reached, filled ${filledCount}/${questions.length} fields`);
+        debug.log(`Max attempts reached, filled ${filledCount}/${questions.length} fields`);
         resolve(filledCount > 0);
       }
     };
@@ -1137,7 +1138,7 @@ function modifyApplyButton() {
   if (applyButton) {
     // Avoid attaching duplicate listeners
     if (applyButton.dataset && applyButton.dataset.uclgModified === 'true') {
-      console.log('Apply button already modified');
+      debug.log('Apply button already modified');
       return;
     }
     if (applyButton.setAttribute) {
@@ -1167,7 +1168,7 @@ function modifyApplyButton() {
 
       // Validate; if invalid, retry once after short delay
       if (!isValidJobDescription(jobDescription)) {
-        console.log('Invalid job description on click; retrying shortly...');
+        debug.log('Invalid job description on click; retrying shortly...');
         await new Promise(r => setTimeout(r, 1500));
         jobTitle = extractJobTitle();
         jobDescription = extractJobDescription();
@@ -1208,7 +1209,7 @@ function modifyApplyButton() {
             throw new Error(response.error || 'Failed to generate proposal');
           }
         } catch (error) {
-          console.error('Error generating proposal:', error);
+          debug.error('Error generating proposal:', error);
           hideLoadingOverlay();
           showNotification('Error generating proposal: ' + error.message, 'error');
         }
@@ -1229,9 +1230,9 @@ function modifyApplyButton() {
       }, 500);
     });
     
-    console.log('Apply button modified successfully');
+    debug.log('Apply button modified successfully');
   } else {
-    console.log('Apply button not found, retrying...');
+    debug.log('Apply button not found, retrying...');
     // Retry after a delay
     setTimeout(modifyApplyButton, 2000);
   }
@@ -1244,7 +1245,7 @@ function fillCoverLetterField(coverLetter, priority = 1) {
     window.__coverLetterFillPriority = 0;
   }
   if (priority < window.__coverLetterFillPriority) {
-    console.log(`Skipping cover letter fill due to lower priority (${priority} < ${window.__coverLetterFillPriority})`);
+    debug.log(`Skipping cover letter fill due to lower priority (${priority} < ${window.__coverLetterFillPriority})`);
     return false;
   }
 
@@ -1279,7 +1280,7 @@ function fillCoverLetterField(coverLetter, priority = 1) {
     if (field) {
       const ok = applyValue(field);
       if (ok) {
-        console.log(`Cover letter filled successfully (priority ${priority})`);
+        debug.log(`Cover letter filled successfully (priority ${priority})`);
         return true;
       }
     }
@@ -1291,12 +1292,12 @@ function fillCoverLetterField(coverLetter, priority = 1) {
     if (textarea.offsetHeight > 100) { // Likely a cover letter field
       const ok = applyValue(textarea);
       if (ok) {
-        console.log(`Cover letter filled in general textarea (priority ${priority})`);
+        debug.log(`Cover letter filled in general textarea (priority ${priority})`);
         return true;
       }
     }
   }
-  console.log('Cover letter field not found');
+  debug.log('Cover letter field not found');
   return false;
 }
 
@@ -1323,8 +1324,59 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: true, questions: questions });
       return true;
     }
+    if (request && request.action === 'generateManualProposal') {
+      debug.log('Manual proposal generation requested...');
+      generateManualProposal().then(() => {
+        sendResponse({ success: true });
+      }).catch((error) => {
+        debug.error('Manual proposal generation failed:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+      return true;
+    }
+    if (request && request.action === 'detectAndAnswerQuestions') {
+      debug.log('Manual trigger for question detection and answering...');
+      
+      // Wait for page to be ready, then detect and answer questions
+      waitForPageToBeReady().then(() => {
+        debug.log('Page is ready, detecting additional questions...');
+        const additionalQuestions = detectAdditionalQuestions();
+        debug.log('Detected questions:', additionalQuestions);
+        
+        if (additionalQuestions.length > 0) {
+          debug.log('Generating answers for', additionalQuestions.length, 'questions');
+          
+          // Get job data for context
+          const jobTitle = extractJobTitle();
+          const jobDescription = extractJobDescription();
+          
+          generateQuestionAnswers(additionalQuestions, jobTitle, jobDescription)
+            .then(answers => {
+              debug.log('Generated answers:', answers);
+              return fillQuestionFieldsWithRetry(additionalQuestions, answers);
+            })
+            .then(success => {
+              if (success) {
+                showNotification(`AI proposal and ${additionalQuestions.length} question answers generated!`, 'success');
+              } else {
+                showNotification('AI proposal generated! (Some questions could not be filled)', 'success');
+              }
+            })
+            .catch(error => {
+              debug.error('Error generating question answers:', error);
+              showNotification('AI proposal generated! (Questions could not be filled)', 'success');
+            });
+        } else {
+          debug.log('No additional questions detected');
+          showNotification('AI proposal generated and filled!', 'success');
+        }
+      });
+      
+      sendResponse({ success: true });
+      return true;
+    }
   } catch (e) {
-    console.error('Content script handler error:', e);
+    debug.error('Content script handler error:', e);
     sendResponse({ success: false, error: e.message });
   }
   return false;
@@ -1495,22 +1547,42 @@ function cleanup() {
   delete window.upworkCoverLetterGeneratorLoaded;
 }
 
-// Function to automatically generate and fill proposal based on job description
-async function generateAutoProposal() {
-  console.log('Generating automatic proposal...');
-  console.log('Current URL:', window.location.href);
+// Function to signal that the page is ready for manual generation
+function signalPageReady() {
+  debug.log('Signaling page ready for manual generation...');
+  
+  // Wait for page to be fully loaded
+  waitForPageToBeReady().then(() => {
+    debug.log('Page is ready, sending signal to popup');
+    
+    // Send message to background script that page is ready
+    chrome.runtime.sendMessage({
+      action: 'pageReady',
+      url: window.location.href,
+      jobTitle: extractJobTitle(),
+      jobDescription: extractJobDescription()
+    }, (response) => {
+      debug.log('Page ready signal sent:', response);
+    });
+  });
+}
+
+// Function to manually generate and fill proposal based on job description
+async function generateManualProposal() {
+  debug.log('Generating manual proposal...');
+  debug.log('Current URL:', window.location.href);
   if (window.__proposalGenerated) {
-    console.log('Proposal already generated, skipping');
+    debug.log('Proposal already generated, skipping');
     return;
   }
   if (window.__proposalGenerationInProgress) {
-    console.log('Proposal generation already in progress, skipping');
+    debug.log('Proposal generation already in progress, skipping');
     return;
   }
   // Ensure dynamic content is present before starting generation
   await waitForPageToBeReady();
   if (window.__proposalGenerated || window.__proposalGenerationInProgress) {
-    console.log('Proposal already generated or in progress after wait, skipping');
+    debug.log('Proposal already generated or in progress after wait, skipping');
     return;
   }
   window.__proposalGenerationInProgress = true;
@@ -1523,7 +1595,7 @@ async function generateAutoProposal() {
   if (!jobDescription || jobDescription.trim().length < 50) {
     const cached = await getCachedDescription();
     if (cached && cached.trim().length >= 50) {
-      console.log('Using cached job description');
+      debug.log('Using cached job description');
       jobDescription = cached;
     }
   }
@@ -1532,19 +1604,19 @@ async function generateAutoProposal() {
     try {
       const fetched = await fetchAndParseJobDescription();
       if (fetched && fetched.trim().length >= 50) {
-        console.log('Using off-page fetched job description');
+        debug.log('Using off-page fetched job description');
         jobDescription = fetched.trim();
       }
     } catch (_) {}
   }
   
-  console.log('Extracted job title:', jobTitle);
-  console.log('Extracted job description length:', jobDescription ? jobDescription.length : 'null');
-  console.log('Extracted job description preview:', jobDescription ? jobDescription.substring(0, 200) + '...' : 'null');
-  console.log('Full job description:', jobDescription);
-  console.log('Extracted freelancer name:', freelancerName);
-  console.log('Freelancer name type:', typeof freelancerName);
-  console.log('Freelancer name length:', freelancerName ? freelancerName.length : 'null');
+  debug.log('Extracted job title:', jobTitle);
+  debug.log('Extracted job description length:', jobDescription ? jobDescription.length : 'null');
+  debug.log('Extracted job description preview:', jobDescription ? jobDescription.substring(0, 200) + '...' : 'null');
+  debug.log('Full job description:', jobDescription);
+  debug.log('Extracted freelancer name:', freelancerName);
+  debug.log('Freelancer name type:', typeof freelancerName);
+  debug.log('Freelancer name length:', freelancerName ? freelancerName.length : 'null');
   
   // Validate the extracted job description to avoid generating from UI/navigation text
   const isValidJobDescription = (text) => {
@@ -1592,7 +1664,7 @@ async function generateAutoProposal() {
         
         // Wait for page to be ready before filling cover letter
         waitForPageToBeReady().then(() => {
-          console.log('Page is ready, filling cover letter...');
+          debug.log('Page is ready, filling cover letter...');
           
           // Fill cover letter with multiple attempts and longer delays
           fillCoverLetterField(coverLetter);
@@ -1600,13 +1672,13 @@ async function generateAutoProposal() {
           
           // Try again after 2 seconds
           setTimeout(() => {
-            console.log('Second attempt to fill cover letter...');
+            debug.log('Second attempt to fill cover letter...');
             fillCoverLetterField(coverLetter);
           }, 2000);
           
           // Try again after 4 seconds
           setTimeout(() => {
-            console.log('Third attempt to fill cover letter...');
+            debug.log('Third attempt to fill cover letter...');
             fillCoverLetterField(coverLetter);
           }, 4000);
           // Mark as generated after scheduling fills
@@ -1624,25 +1696,25 @@ async function generateAutoProposal() {
         // Check if auto-answer questions is enabled
         chrome.storage.local.get(['autoAnswerQuestions'], function(result) {
           const autoAnswerQuestions = result.autoAnswerQuestions === true;
-          console.log('Auto-answer questions setting:', autoAnswerQuestions);
+          debug.log('Auto-answer questions setting:', autoAnswerQuestions);
           
           if (autoAnswerQuestions) {
             // Wait for page to be completely loaded and form elements to be ready
             // Add extra delay to ensure cover letter is filled first
             setTimeout(() => {
-              console.log('Waiting additional 5 seconds before question detection...');
+              debug.log('Waiting additional 5 seconds before question detection...');
               setTimeout(() => {
                 waitForPageToBeReady().then(() => {
-                  console.log('Page is ready, detecting additional questions...');
+                  debug.log('Page is ready, detecting additional questions...');
                   const additionalQuestions = detectAdditionalQuestions();
-                  console.log('Detected questions:', additionalQuestions);
+                  debug.log('Detected questions:', additionalQuestions);
                   
                   if (additionalQuestions.length > 0) {
-                    console.log('Generating answers for', additionalQuestions.length, 'questions');
+                    debug.log('Generating answers for', additionalQuestions.length, 'questions');
                     updateLoadingOverlay('Generating answers to questions...');
                     generateQuestionAnswers(additionalQuestions, jobTitle, jobDescription)
                       .then(answers => {
-                        console.log('Generated answers:', answers);
+                        debug.log('Generated answers:', answers);
                         updateLoadingOverlay('Filling answers...');
                         return fillQuestionFieldsWithRetry(additionalQuestions, answers);
                       })
@@ -1655,12 +1727,12 @@ async function generateAutoProposal() {
                         }
                       })
                       .catch(error => {
-                        console.error('Error generating question answers:', error);
+                        debug.error('Error generating question answers:', error);
                         hideLoadingOverlay();
                         showNotification('AI proposal generated! (Questions could not be filled)', 'success');
                       });
                   } else {
-                    console.log('No additional questions detected');
+                    debug.log('No additional questions detected');
                     hideLoadingOverlay();
                     showNotification('AI proposal generated and filled!', 'success');
                   }
@@ -1668,18 +1740,18 @@ async function generateAutoProposal() {
               }, 5000); // Wait additional 5 seconds
             }, 3000); // Wait 3 seconds after cover letter is filled
           } else {
-            console.log('Auto-answer questions is disabled');
+            debug.log('Auto-answer questions is disabled');
             hideLoadingOverlay();
             showNotification('AI proposal generated and filled!', 'success');
           }
         });
         
-        console.log('Proposal generated successfully:', coverLetter);
+        debug.log('Proposal generated successfully:', coverLetter);
       } else {
         throw new Error(response.error || 'Failed to generate proposal');
       }
     } catch (error) {
-      console.error('Error generating proposal:', error);
+      debug.error('Error generating proposal:', error);
       
       // Check if it's a usage limit error
       if (error.message && error.message.includes('limit')) {
@@ -1705,7 +1777,7 @@ ${freelancerName}`;
       hideLoadingOverlay();
     }
   } else {
-    console.log('Job description not ready/invalid. Will retry once shortly.');
+    debug.log('Job description not ready/invalid. Will retry once shortly.');
     // Allow a single retry after a short delay
     if (!window.__proposalRetryDone) {
       window.__proposalGenerationInProgress = false;
@@ -1715,7 +1787,7 @@ ${freelancerName}`;
       }, 2000);
       return;
     }
-    console.log('Retry already attempted. Generating a conservative generic proposal.');
+    debug.log('Retry already attempted. Generating a conservative generic proposal.');
     
     // Generate a generic proposal even without job description
     const genericProposal = `I have over 8 years of experience and I'm really excited about this ${jobTitle} project. I've worked on similar stuff before and I think I can help you out here.
@@ -1738,17 +1810,17 @@ ${freelancerName}`;
 // Test function to check if background script is responding
 async function testBackgroundConnection() {
   try {
-    console.log('Testing background script connection...');
+    debug.log('Testing background script connection...');
     const response = await chrome.runtime.sendMessage({action: 'getUsage'});
     if (response && response.success) {
-      console.log('✅ Background script is responding correctly');
+      debug.log('✅ Background script is responding correctly');
       return true;
     } else {
-      console.warn('⚠️ Background script responded but with error:', response);
+      debug.warn('⚠️ Background script responded but with error:', response);
       return false;
     }
   } catch (error) {
-    console.error('❌ Background script is not responding:', error);
+    debug.error('❌ Background script is not responding:', error);
     return false;
   }
 }
@@ -1767,12 +1839,12 @@ function initialize() {
   // Check if this is an Upwork application page
   const currentUrl = window.location.href;
   
-  console.log('Extension loaded on URL:', currentUrl);
+  debug.log('Extension loaded on URL:', currentUrl);
   
-  // If this is an Upwork application page, generate proposal automatically
+  // Signal that the page is ready for manual generation
   if (currentUrl.includes('/apply/') || currentUrl.includes('/proposals/')) {
-    console.log('Upwork application page detected! Generating proposal...');
-    generateAutoProposal();
+    debug.log('Upwork application page detected! Page ready for manual generation.');
+    signalPageReady();
   }
   
   // Initialize the functionality
@@ -1835,7 +1907,7 @@ if (document.readyState === 'loading') {
 window.addEventListener('beforeunload', cleanup);
 
 } catch (error) {
-  console.error('Error in Upwork Cover Letter Generator:', error);
+  debug.error('Error in Upwork Cover Letter Generator:', error);
   // Show user-friendly error message
   const errorNotification = document.createElement('div');
   errorNotification.style.cssText = `
