@@ -74,7 +74,7 @@ Based on your API response:
     {
       "keyType": "OPENAI",
       "isActive": true,
-      "key": "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"
+      "key": ""
     }
   ]
 }
