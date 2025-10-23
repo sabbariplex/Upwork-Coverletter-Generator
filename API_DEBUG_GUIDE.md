@@ -74,7 +74,7 @@ Based on your API response:
     {
       "keyType": "OPENAI",
       "isActive": true,
-      "key": ""
+      "key": "12345"
     }
   ]
 }
