@@ -730,7 +730,7 @@ const Popup = () => {
           </button>
         </div>
       </div>
-      
+{/*       
       <div className="settings" style={{marginTop: '10px'}}>
           <span className="setting-label">Debug Tools</span>
         <div className="setting-item">
@@ -814,14 +814,16 @@ const Popup = () => {
             </div>
           </div>
         )}
-      </div>
+      </div> */}
       
       <div className="info">
         <h3>How to use:</h3>
         <p>
           1. Navigate to any Upwork job posting<br/>
           2. Click "Apply Now" button<br/>
-          3. The extension will automatically generate and fill your cover letter
+          3. Once the job is detected. You can use the "Generate Cover Letter" button to generate a cover letter.
+          4. You can also use the "Auto-answer Questions" button to automatically answer the questions in the cover letter.
+          5. You can also use the "Advanced Settings & Templates" button to open the advanced settings and templates.
         </p>
       </div>
     </div>

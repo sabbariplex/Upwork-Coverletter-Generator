@@ -6,8 +6,8 @@ debug.log('Background script loaded');
 // Configuration for freemium model
 const DEFAULT_CONFIG = {
   // Your backend API endpoint - update this with your deployed backend URL
-  // API_BASE_URL: 'http://16.170.241.226:5500', // Updated to match your backend
-  API_BASE_URL: 'http://localhost:5500', // Updated to match your backend
+  API_BASE_URL: 'http://16.170.241.226:5500', // Updated to match your backend
+  // API_BASE_URL: 'http://localhost:5500', // Updated to match your backend
   // Free tier limits
   FREE_PROPOSAL_LIMIT: 50,
   DEFAULT_MODEL: 'gpt-3.5-turbo',
@@ -895,58 +895,88 @@ async function trackUsage() {
   }
 }
 
-// AI Proposal Prompts Templates
-const AI_PROMPTS_TEMPLATES = {
-  universal: {
-    metaPrompt: `Generate an Upwork proposal. Follow ALL rules:
-- Start with: "I have 8+ years of experience—[mirror client need in plain English]."
-- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
-- Mention relevant tools (swap per job: GSC, GA4, Screaming Frog, Git, Docker, Figma, etc.).
-- Short sentences. Max 8 lines. No bullets. No exclamation points.
-- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
-- Include a tiny plan and a next step with availability.
-- Prefer verbs and outcomes over adjectives. Use industry terminology.`,
-    template: `I have 8+ years of experience—you need [plain-English restatement].  
-Step 1: [audit/plan/prototype] → deliver [artifact] in [X days].  
-Step 2: [implement/test/iterate] → ship with docs and handoff.  
-KPIs: [metric 1], [metric 2], [metric 3] by [date].  
-Tools: [role-specific tools].  
-Tiny plan: [one sentence on sequence/milestones]. Next step: I'm available [times, TZ].  
-Question: [one precise clarifying question]?`
-  },
-  software: {
-    metaPrompt: `Generate an Upwork proposal for software development. Follow ALL rules:
-- Start with: "I have 8+ years of experience—you need [feature/app/integration] that [does X]."
-- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
-- Mention relevant tools: Git, GitHub Actions, Docker, AWS/GCP, Postman, Jira.
-- Short sentences. Max 8 lines. No bullets. No exclamation points.
-- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
-- Include a tiny plan and a next step with availability.`,
-    template: `I have 8+ years of experience—you need [feature/app/integration] that [does X].  
-Step 1: Define scope, API/DB schema, and tests.  
-Step 2: Build, CI/CD, staging review, handoff.  
-KPIs: lead time <[X] days, error rate <[Y]%, perf +[Z]%.  
-Tools: Git, GitHub Actions, Docker, AWS/GCP, Postman.  
-Tiny plan: weekly demo, PR reviews. I can start [date/TZ].  
-Question: Any non-functional constraints I must meet first?`
-  },
-  marketing: {
-    metaPrompt: `Generate an Upwork proposal for marketing/SEO. Follow ALL rules:
-- Start with: "I have 8+ years of experience—you need growth in [traffic/conversions] from [channels/pages]."
-- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
-- Mention relevant tools: GSC, GA4, Screaming Frog, Ahrefs/Semrush, Looker Studio.
-- Short sentences. Max 8 lines. No bullets. No exclamation points.
-- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
-- Include a tiny plan and a next step with availability.`,
-    template: `I have 8+ years of experience—you need growth in [traffic/conversions] from [channels/pages].  
-Step 1: Audit current state, identify gaps, create strategy.  
-Step 2: Implement, monitor, optimize, report.  
-KPIs: traffic +[X]%, conversions +[Y]%, ROI [Z]% by [date].  
-Tools: GSC, GA4, Screaming Frog, Ahrefs/Semrush, Looker Studio.  
-Tiny plan: weekly reports, monthly reviews. I can start [date/TZ].  
-Question: What's your current conversion rate and main traffic source?`
+// Template cache for generated templates
+const templateCache = new Map();
+
+// Generate template dynamically using GPT based on meta prompt
+async function generateTemplateFromMetaPrompt(metaPrompt, apiKey, model = 'gpt-3.5-turbo') {
+  debug.log('🤖 Generating template from meta prompt...');
+  
+  // Check cache first - use a more robust key generation
+  const cacheKey = `template_${metaPrompt.length}_${metaPrompt.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '_')}`;
+  if (templateCache.has(cacheKey)) {
+    debug.log('✅ Using cached template');
+    return templateCache.get(cacheKey);
   }
-};
+  
+  try {
+    const systemPrompt = `You are an expert at creating Upwork proposal templates. Based on the meta prompt provided, generate a specific template structure that follows the rules and guidelines.
+
+The template should:
+1. Be a concrete example that demonstrates the meta prompt rules
+2. Use placeholders like [X], [Y], [Z] for dynamic content
+3. Be 8 lines or less
+4. Include all the elements mentioned in the meta prompt
+5. Be professional and specific to the industry/role
+
+Return ONLY the template text, no explanations or additional text.`;
+
+    const userPrompt = `Meta Prompt:
+${metaPrompt}
+
+Generate a specific template that follows these rules:`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 500
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      debug.log('❌ Template generation failed:', errorData);
+      throw new Error(`Template generation failed: ${errorData.error?.message || 'Unknown error'}`);
+    }
+    
+    const data = await response.json();
+    const template = data.choices[0].message.content.trim();
+    
+    debug.log('✅ Template generated successfully');
+    
+    // Cache the template
+    templateCache.set(cacheKey, template);
+    
+    return template;
+  } catch (error) {
+    debug.log('❌ Template generation error:', error);
+    console.error('❌ Template generation error:', error);
+    throw error;
+  }
+}
+
+// Get template by type (now generates dynamically)
+async function getTemplateByType(templateType, metaPrompt, apiKey, model) {
+  debug.log(`📋 Getting template for type: ${templateType}`);
+  
+  // For custom template, use the provided meta prompt directly
+  if (templateType === 'custom') {
+    return await generateTemplateFromMetaPrompt(metaPrompt, apiKey, model);
+  }
+  
+  // For other types, use the meta prompt to generate template
+  return await generateTemplateFromMetaPrompt(metaPrompt, apiKey, model);
+}
 
 // Function to generate custom prompt based on user settings
 // Helper function to generate proper name format (firstName + first letter of lastName)
@@ -1010,17 +1040,33 @@ async function generateAIProposalWithSettings(jobTitle, jobDescription, settings
           return { success: true, coverLetter: customPrompt, shouldIncrement: false };
         }
     
-    // AI mode - use templates
-    debug.log('🤖 Using AI mode with templates');
-    const template = AI_PROMPTS_TEMPLATES[settings.promptTemplate] || AI_PROMPTS_TEMPLATES.universal;
+    // AI mode - generate template dynamically
+    debug.log('🤖 Using AI mode with dynamic template generation');
     
     // Check for template-specific meta prompt override
     const storageKey = `metaPromptOverride_${settings.promptTemplate}`;
     const overrideResult = await chrome.storage.local.get([storageKey]);
     const metaPromptOverride = overrideResult[storageKey];
     
-    const metaPrompt = metaPromptOverride || template.metaPrompt;
-    const baseTemplate = template.template;
+    // Get meta prompt from storage or use default
+    let metaPrompt;
+    if (metaPromptOverride) {
+      metaPrompt = metaPromptOverride;
+    } else {
+      // Get default meta prompt from storage
+      const defaultMetaPromptResult = await chrome.storage.local.get(['defaultMetaPrompt']);
+      metaPrompt = defaultMetaPromptResult.defaultMetaPrompt || `Generate an Upwork proposal. Follow ALL rules:
+- Start with: "I have 8+ years of experience—[mirror client need in plain English]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools (swap per job: GSC, GA4, Screaming Frog, Git, Docker, Figma, etc.).
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.
+- Prefer verbs and outcomes over adjectives. Use industry terminology.`;
+    }
+    
+    // Generate template dynamically using GPT
+    const baseTemplate = await generateTemplateFromMetaPrompt(metaPrompt, settings.apiKey, settings.model);
     
     const userMessage = `JOB TITLE: ${jobTitle}
 JOB DESCRIPTION: ${jobDescription}
@@ -1149,6 +1195,56 @@ Return answers in order, one per question, separated by "---ANSWER---".`;
   }
 }
 
+// Handle template generation request
+async function handleGenerateTemplate(request, sendResponse) {
+  debug.log('🤖 Generating template from meta prompt...');
+  
+  try {
+    // Check authentication first
+    if (!authState.isAuthenticated) {
+      debug.log('❌ User not authenticated');
+      sendResponse({ success: false, error: 'Please log in to generate templates' });
+      return;
+    }
+    
+    // Verify token
+    const verifyResult = await verifyToken();
+    if (!verifyResult.success) {
+      debug.log('❌ Token verification failed');
+      sendResponse({ success: false, error: 'Authentication failed. Please log in again.' });
+      return;
+    }
+    
+    // Get API key from server
+    const apiKeyResult = await getApiKey();
+    if (!apiKeyResult.success) {
+      debug.log('❌ API key fetch failed:', apiKeyResult.error);
+      sendResponse({ success: false, error: apiKeyResult.error });
+      return;
+    }
+    
+    const apiKey = apiKeyResult.apiKey;
+    debug.log('✅ Server API key retrieved for template generation');
+    
+    // Get model settings
+    const settings = await new Promise((resolve) => {
+      chrome.storage.local.get(['openaiModel', 'openaiTemperature'], resolve);
+    });
+    
+    const model = settings.openaiModel || DEFAULT_CONFIG.DEFAULT_MODEL;
+    
+    // Generate template using the meta prompt
+    const template = await generateTemplateFromMetaPrompt(request.metaPrompt, apiKey, model);
+    
+    debug.log('✅ Template generated successfully');
+    sendResponse({ success: true, template: template });
+    
+  } catch (error) {
+    console.error('❌ Template generation error:', error);
+    sendResponse({ success: false, error: 'Template generation failed: ' + error.message });
+  }
+}
+
 // Message handlers
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   try {
@@ -1216,6 +1312,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
       case 'generateQuestionAnswers':
         handleGenerateQuestionAnswers(request, sendResponse);
+        return true;
+        
+      case 'generateTemplate':
+        handleGenerateTemplate(request, sendResponse);
         return true;
         
       case 'testConnection':

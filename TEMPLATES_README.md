@@ -1,17 +1,29 @@
-# 🚀 AI Templates Configuration
+# 🚀 Dynamic AI Templates Configuration
 
-This guide explains how to customize the AI proposal templates in the Upwork Cover Letter Generator extension.
+This guide explains how the new dynamic AI proposal template system works in the Upwork Cover Letter Generator extension.
+
+## 🎯 How It Works
+
+The extension now generates templates **dynamically** using GPT based on meta prompts, rather than using predefined static templates. This provides much more flexibility and customization.
+
+### Key Features:
+- **Dynamic Generation**: Templates are generated on-demand using GPT
+- **Meta Prompt Driven**: Templates are created based on your meta prompt rules
+- **Caching**: Generated templates are cached to avoid unnecessary API calls
+- **Server API Key**: Uses your server-provided OpenAI API key
+- **Real-time Preview**: Generate and preview templates instantly
 
 ## 📁 Template Files
 
-The templates are stored in a clean, separate file for easy modification:
+The template system has been restructured:
 
-- **`src/templates/aiTemplates.js`** - Main templates file
-- **`src/settings/Settings.js`** - React component that uses the templates
+- **`src/background.js`** - Contains the dynamic template generation logic
+- **`src/templates/aiTemplates.js`** - Contains template metadata and default meta prompts
+- **`src/settings/Settings.js`** - React component for template management
 
-## 🎯 Available Templates
+## 🎯 Available Template Types
 
-The extension includes 6 pre-built templates:
+The extension includes 6 template types with default meta prompts:
 
 1. **🌐 Universal** - Works for any job type
 2. **💻 Software/Apps Development** - For programming jobs
@@ -20,154 +32,122 @@ The extension includes 6 pre-built templates:
 5. **📊 Data/Analytics** - For data science and analytics jobs
 6. **⚙️ Custom Prompt** - Your own custom template
 
-## ✏️ How to Modify Templates
+## ✏️ How to Use Dynamic Templates
 
-### Option 1: Through the Extension UI (Recommended)
-
+### Step 1: Select Template Type
 1. Open the extension popup
 2. Click "Advanced Settings & Templates"
 3. Go to the "🚀 AI Prompts" tab
-4. Select a template from the dropdown
-5. Edit the "Meta Prompt" field
-6. Click "💾 Save Meta Prompt"
+4. Select a template type from the dropdown
 
-### Option 2: Direct File Editing
+### Step 2: Customize Meta Prompt (Optional)
+1. Edit the "Meta Prompt" field to customize the rules
+2. Click "💾 Save Meta Prompt" to save your changes
+3. Click "🔄 Reset Meta Prompt" to restore defaults
 
-1. Open `src/templates/aiTemplates.js`
-2. Find the template you want to modify
-3. Edit the `metaPrompt` and `template` properties
-4. Run `npm run build` to rebuild the extension
+### Step 3: Generate Template
+1. Click "Generate Template" to create a template based on your meta prompt
+2. The system will use GPT to generate a specific template structure
+3. Generated templates are cached for performance
 
-## 🔧 Template Structure
+### Step 4: Preview Template
+1. Click "Preview Template" to see the generated template
+2. The preview shows both the meta prompt and generated template
 
-Each template has two parts:
+## 🔧 Template Generation Process
 
-```javascript
-templateName: {
-  metaPrompt: `Rules for the AI to follow when generating proposals...`,
-  template: `The actual template structure with placeholders...`
-}
+When you click "Generate Template":
+
+1. **Authentication Check**: Verifies you're logged in
+2. **API Key Retrieval**: Gets your OpenAI API key from the server
+3. **GPT Call**: Sends meta prompt to GPT to generate template
+4. **Caching**: Stores generated template for future use
+5. **Display**: Shows the generated template in the preview
+
+## 📝 Meta Prompt Guidelines
+
+### Effective Meta Prompts Should:
+- Define the proposal structure and format
+- Specify what phrases to avoid
+- Include industry-specific requirements
+- Set line limits and style guidelines
+- Mention relevant tools and technologies
+
+### Example Meta Prompt:
+```
+Generate an Upwork proposal. Follow ALL rules:
+- Start with: "I have 8+ years of experience—[mirror client need in plain English]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools (swap per job: GSC, GA4, Screaming Frog, Git, Docker, Figma, etc.).
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.
+- Prefer verbs and outcomes over adjectives. Use industry terminology.
 ```
 
-### Meta Prompt
-- Controls the rules the AI follows
-- Defines what phrases to avoid
-- Sets the structure and style requirements
+## 🚀 Benefits of Dynamic Templates
 
-### Template Body
-- The actual proposal template
-- Uses placeholders like `[X]`, `[Y]`, `[Z]` for dynamic content
-- Should be concise and professional
+### Compared to Static Templates:
+- **More Flexible**: Templates adapt to your specific meta prompt rules
+- **Always Fresh**: No need to manually update template structures
+- **Consistent**: Templates always follow your exact guidelines
+- **Efficient**: Caching prevents unnecessary API calls
+- **Customizable**: Easy to modify meta prompts for different use cases
 
-## 📝 Adding New Templates
+## 🔄 Template Caching
 
-To add a new template:
-
-1. Open `src/templates/aiTemplates.js`
-2. Add your template to `AI_PROMPTS_TEMPLATES`:
-
-```javascript
-yourTemplate: {
-  metaPrompt: `Your meta prompt rules...`,
-  template: `Your template structure...`
-}
-```
-
-3. Add metadata to `TEMPLATE_METADATA`:
-
-```javascript
-yourTemplate: {
-  name: 'Your Template Name',
-  description: 'Description of when to use this template',
-  icon: '🎯'
-}
-```
-
-4. Run `npm run build` to rebuild
+Generated templates are automatically cached to improve performance:
+- **Cache Key**: Based on meta prompt content
+- **Cache Duration**: Until extension restart
+- **Cache Benefits**: Faster template generation, reduced API costs
 
 ## 💡 Best Practices
 
-### Meta Prompts
-- Keep rules clear and specific
-- Ban generic phrases like "I'm excited" or "best regards"
-- Include specific tool mentions
-- Set line limits (usually 8 lines max)
+### Meta Prompt Design:
+1. **Be Specific**: Include exact formatting requirements
+2. **Set Boundaries**: Define what to avoid (generic phrases, etc.)
+3. **Industry Focus**: Mention relevant tools and terminology
+4. **Length Limits**: Specify maximum lines or characters
+5. **Structure**: Define the proposal flow and components
 
-### Template Bodies
-- Start with experience statement
-- Include 2 clear steps
-- Add 2-3 KPIs (Key Performance Indicators)
-- End with one clarifying question
-- Use industry-specific terminology
+### Template Usage:
+1. **Test First**: Generate and preview templates before using
+2. **Customize Meta Prompts**: Adjust rules for different job types
+3. **Save Overrides**: Use the save feature for custom meta prompts
+4. **Reset When Needed**: Use reset to restore default meta prompts
 
-### Example Template Structure
-```
-I have 8+ years of experience—you need [specific need].
-Step 1: [first action] → deliver [result] in [timeframe].
-Step 2: [second action] → [final outcome].
-KPIs: [metric 1], [metric 2], [metric 3] by [date].
-Tools: [relevant tools].
-Tiny plan: [one sentence summary]. Next step: I'm available [times].
-Question: [one precise clarifying question]?
-```
+## 🛠️ Technical Details
 
-## 🔄 Template Overrides
+### API Integration:
+- Uses OpenAI GPT models (configurable)
+- Server-provided API keys for security
+- Automatic authentication and token verification
+- Error handling and fallback mechanisms
 
-The extension supports per-template overrides:
+### Performance:
+- Template caching reduces API calls
+- Async processing for smooth UI
+- Background script handles API communication
+- Real-time status updates and error messages
 
-- Each template can have its own meta prompt override
-- Overrides are stored separately from defaults
-- Use the UI to save/load overrides
-- Overrides persist across extension updates
+## 📚 Migration from Static Templates
 
-## 🚀 Testing Templates
+The old static template system has been completely replaced:
+- ✅ All predefined templates removed
+- ✅ Dynamic generation implemented
+- ✅ Meta prompt system enhanced
+- ✅ Caching system added
+- ✅ UI updated for new workflow
 
-1. Select a template in the settings
-2. Click "👁️ Preview Template" to see how it looks
-3. Test with real Upwork job postings
-4. Adjust the meta prompt if needed
+Your existing meta prompt overrides will continue to work with the new system.
 
-## 📚 Template Examples
+## 🚀 Getting Started
 
-### Software Development Template
-- Focuses on technical skills and tools
-- Mentions Git, Docker, CI/CD
-- Emphasizes code quality and testing
+1. **Login**: Make sure you're authenticated
+2. **Select Template**: Choose a template type
+3. **Customize**: Edit the meta prompt if needed
+4. **Generate**: Click "Generate Template"
+5. **Preview**: Review the generated template
+6. **Use**: The template will be used for proposal generation
 
-### Marketing Template
-- Highlights growth metrics and conversions
-- Mentions SEO tools like GSC, GA4
-- Focuses on measurable results
-
-### Design Template
-- Emphasizes user experience and accessibility
-- Mentions design tools like Figma
-- Focuses on user testing and feedback
-
-## 🛠️ Troubleshooting
-
-### Template Not Loading
-- Check the template name in `AI_PROMPTS_TEMPLATES`
-- Ensure the template has both `metaPrompt` and `template` properties
-- Rebuild the extension with `npm run build`
-
-### Override Not Saving
-- Check browser storage permissions
-- Ensure you're using the correct template name
-- Try refreshing the extension
-
-### Preview Not Working
-- Make sure the template is properly formatted
-- Check for syntax errors in the template
-- Verify the template exists in the templates file
-
-## 📞 Support
-
-If you need help customizing templates:
-
-1. Check the console for error messages
-2. Verify your template syntax
-3. Test with the preview function
-4. Rebuild the extension after changes
-
-Remember: Always run `npm run build` after modifying template files!
+The system is now fully dynamic and will generate templates based on your meta prompts using GPT!

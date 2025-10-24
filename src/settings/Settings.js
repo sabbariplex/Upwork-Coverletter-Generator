@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './styles.css';
-import { AI_PROMPTS_TEMPLATES, getTemplateOptions, getTemplate, getMetaPromptStorageKey } from '../templates/aiTemplates.js';
+import { getTemplateOptions, getTemplateMetadata, getDefaultMetaPrompt, getMetaPromptStorageKey } from '../templates/aiTemplates.js';
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('profile');
@@ -22,6 +22,8 @@ const Settings = () => {
     newPassword: '',
     confirmPassword: ''
   });
+  const [generatedTemplate, setGeneratedTemplate] = useState('');
+  const [isGeneratingTemplate, setIsGeneratingTemplate] = useState(false);
   useEffect(() => {
     checkAuthentication();
   }, []);
@@ -151,12 +153,14 @@ const Settings = () => {
       ]);
       
       const templateType = result.promptTemplate || 'universal';
-      const template = getTemplate(templateType);
       
       // Load template-specific meta prompt override
       const storageKey = getMetaPromptStorageKey(templateType);
       const metaResult = await chrome.storage.local.get([storageKey]);
       const metaPromptOverride = metaResult[storageKey];
+      
+      // Get default meta prompt for this template type
+      const defaultMetaPrompt = getDefaultMetaPrompt(templateType);
       
       // Get user name from backend user data
       const userName = result.user ? `${result.user.firstName || ''} ${result.user.lastName || ''}`.trim() : '';
@@ -166,7 +170,7 @@ const Settings = () => {
         yourName: userName,
         customPrompt: result.customPrompt || '',
         promptTemplate: templateType,
-        metaPromptEditor: metaPromptOverride || template.metaPrompt || '',
+        metaPromptEditor: metaPromptOverride || defaultMetaPrompt || '',
         customAiPrompt: result.customAiPrompt || ''
       }));
       
@@ -283,7 +287,7 @@ const Settings = () => {
     try {
       const templateType = settings.promptTemplate;
       const storageKey = getMetaPromptStorageKey(templateType);
-      const template = getTemplate(templateType);
+      const defaultMetaPrompt = getDefaultMetaPrompt(templateType);
       
       // Remove the override to use default
       await chrome.storage.local.remove([storageKey]);
@@ -291,7 +295,7 @@ const Settings = () => {
       // Load the default meta prompt
       setSettings(prev => ({ 
         ...prev, 
-        metaPromptEditor: template.metaPrompt || '' 
+        metaPromptEditor: defaultMetaPrompt || '' 
       }));
       
       showStatusMessage('info', `Meta prompt reset to default for ${templateType} template`);
@@ -302,7 +306,7 @@ const Settings = () => {
 
   const handleTemplateChange = async () => {
     const templateType = settings.promptTemplate;
-    const template = getTemplate(templateType);
+    const defaultMetaPrompt = getDefaultMetaPrompt(templateType);
     
     // Load meta prompt override if it exists
     const storageKey = getMetaPromptStorageKey(templateType);
@@ -312,29 +316,62 @@ const Settings = () => {
       
       setSettings(prev => ({
         ...prev,
-        metaPromptEditor: metaPromptOverride || template.metaPrompt || ''
+        metaPromptEditor: metaPromptOverride || defaultMetaPrompt || ''
       }));
     } catch (error) {
       console.error('Error loading meta prompt override:', error);
       setSettings(prev => ({
         ...prev,
-        metaPromptEditor: template.metaPrompt || ''
+        metaPromptEditor: defaultMetaPrompt || ''
       }));
+    }
+  };
+
+  const generateTemplate = async () => {
+    if (!isAuthenticated) {
+      showStatusMessage('error', 'Please log in to generate templates');
+      return;
+    }
+
+    setIsGeneratingTemplate(true);
+    try {
+      const metaPrompt = settings.metaPromptEditor || getDefaultMetaPrompt(settings.promptTemplate);
+      
+      // Send request to background script to generate template
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          action: 'generateTemplate',
+          metaPrompt: metaPrompt,
+          templateType: settings.promptTemplate
+        }, resolve);
+      });
+
+      if (response && response.success) {
+        setGeneratedTemplate(response.template);
+        showStatusMessage('success', 'Template generated successfully!');
+      } else {
+        showStatusMessage('error', response?.error || 'Failed to generate template');
+      }
+    } catch (error) {
+      console.error('Template generation error:', error);
+      showStatusMessage('error', 'Failed to generate template');
+    } finally {
+      setIsGeneratingTemplate(false);
     }
   };
 
   const previewTemplate = () => {
     const templateType = settings.promptTemplate;
-    const template = getTemplate(templateType);
+    const defaultMetaPrompt = getDefaultMetaPrompt(templateType);
     
     const previewContent = `
       <div style="margin-bottom: 15px;">
         <h5>Meta Prompt:</h5>
-        <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px; font-size: 12px;">${settings.metaPromptEditor || template.metaPrompt}</pre>
+        <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px; font-size: 12px;">${settings.metaPromptEditor || defaultMetaPrompt}</pre>
       </div>
       <div>
-        <h5>Template Body:</h5>
-        <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px;">${template.template}</pre>
+        <h5>Generated Template:</h5>
+        <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px;">${generatedTemplate || '[Click "Generate Template" to create a template based on the meta prompt above]'}</pre>
       </div>
     `;
     
@@ -721,6 +758,14 @@ Best regards,
               )}
 
               <div className="form-group">
+                <button 
+                  className="btn btn-primary" 
+                  onClick={generateTemplate}
+                  disabled={isGeneratingTemplate}
+                  style={{ marginRight: '10px' }}
+                >
+                  {isGeneratingTemplate ? 'Generating...' : 'Generate Template'}
+                </button>
                 <button className="btn btn-secondary" onClick={previewTemplate}>
                   Preview Template
                 </button>
