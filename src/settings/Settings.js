@@ -8,8 +8,7 @@ const Settings = () => {
     yourName: '',
     customPrompt: '',
     promptTemplate: 'universal',
-    metaPromptEditor: '',
-    customAiPrompt: ''
+    metaPromptEditor: ''
   });
   const [statusMessage, setStatusMessage] = useState({ show: false, type: '', message: '' });
   const [templatePreview, setTemplatePreview] = useState({ show: false, content: '' });
@@ -22,8 +21,6 @@ const Settings = () => {
     newPassword: '',
     confirmPassword: ''
   });
-  const [generatedTemplate, setGeneratedTemplate] = useState('');
-  const [isGeneratingTemplate, setIsGeneratingTemplate] = useState(false);
   useEffect(() => {
     checkAuthentication();
   }, []);
@@ -55,8 +52,7 @@ const Settings = () => {
             yourName: '',
             customPrompt: '',
             promptTemplate: 'universal',
-            metaPromptEditor: '',
-            customAiPrompt: ''
+            metaPromptEditor: ''
           });
           setPasswordData({
             currentPassword: '',
@@ -85,8 +81,7 @@ const Settings = () => {
             yourName: '',
             customPrompt: '',
             promptTemplate: 'universal',
-            metaPromptEditor: '',
-            customAiPrompt: ''
+            metaPromptEditor: ''
           });
           setPasswordData({
             currentPassword: '',
@@ -106,8 +101,7 @@ const Settings = () => {
         yourName: '',
         customPrompt: '',
         promptTemplate: 'universal',
-        metaPromptEditor: '',
-        customAiPrompt: ''
+        metaPromptEditor: ''
       });
       setPasswordData({
         currentPassword: '',
@@ -147,7 +141,6 @@ const Settings = () => {
       const result = await chrome.storage.local.get([
         'customPrompt',
         'promptTemplate',
-        'customAiPrompt',
         'proposalMode',
         'user'
       ]);
@@ -170,8 +163,7 @@ const Settings = () => {
         yourName: userName,
         customPrompt: result.customPrompt || '',
         promptTemplate: templateType,
-        metaPromptEditor: metaPromptOverride || defaultMetaPrompt || '',
-        customAiPrompt: result.customAiPrompt || ''
+        metaPromptEditor: metaPromptOverride || defaultMetaPrompt || ''
       }));
       
       // Set active tab based on proposal mode
@@ -263,21 +255,31 @@ const Settings = () => {
     showStatusMessage('info', 'Custom prompt reset to default');
   };
 
-  const saveCustomAiPrompt = async () => {
-    try {
-      await chrome.storage.local.set({ customAiPrompt: settings.customAiPrompt });
-      showStatusMessage('success', 'Custom AI prompt saved successfully!');
-    } catch (error) {
-      showStatusMessage('error', 'Failed to save custom AI prompt');
-    }
-  };
-
   const saveMetaPrompt = async () => {
     try {
       const templateType = settings.promptTemplate;
       const storageKey = getMetaPromptStorageKey(templateType);
       await chrome.storage.local.set({ [storageKey]: settings.metaPromptEditor });
-      showStatusMessage('success', `Meta prompt saved for ${templateType} template!`);
+      
+      // Trigger automatic template regeneration
+      const regenerateResult = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          action: 'regenerateTemplate',
+          templateType: templateType,
+          metaPrompt: settings.metaPromptEditor
+        }, resolve);
+      });
+      
+      if (regenerateResult && regenerateResult.success) {
+        showStatusMessage('success', 'Meta prompt saved and template regenerated successfully!');
+        
+        // If preview is open, refresh it
+        if (templatePreview.show) {
+          await previewTemplate();
+        }
+      } else {
+        showStatusMessage('warning', 'Meta prompt saved, but template regeneration failed: ' + (regenerateResult?.error || 'Unknown error'));
+      }
     } catch (error) {
       showStatusMessage('error', 'Failed to save meta prompt');
     }
@@ -327,42 +329,14 @@ const Settings = () => {
     }
   };
 
-  const generateTemplate = async () => {
-    if (!isAuthenticated) {
-      showStatusMessage('error', 'Please log in to generate templates');
-      return;
-    }
-
-    setIsGeneratingTemplate(true);
-    try {
-      const metaPrompt = settings.metaPromptEditor || getDefaultMetaPrompt(settings.promptTemplate);
-      
-      // Send request to background script to generate template
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({
-          action: 'generateTemplate',
-          metaPrompt: metaPrompt,
-          templateType: settings.promptTemplate
-        }, resolve);
-      });
-
-      if (response && response.success) {
-        setGeneratedTemplate(response.template);
-        showStatusMessage('success', 'Template generated successfully!');
-      } else {
-        showStatusMessage('error', response?.error || 'Failed to generate template');
-      }
-    } catch (error) {
-      console.error('Template generation error:', error);
-      showStatusMessage('error', 'Failed to generate template');
-    } finally {
-      setIsGeneratingTemplate(false);
-    }
-  };
-
-  const previewTemplate = () => {
+  const previewTemplate = async () => {
     const templateType = settings.promptTemplate;
     const defaultMetaPrompt = getDefaultMetaPrompt(templateType);
+    
+    // Fetch generated template from storage
+    const storageKey = `generatedTemplate_${templateType}`;
+    const result = await chrome.storage.local.get([storageKey]);
+    const generatedTemplate = result[storageKey] || '[Template not generated yet. Save the meta prompt to generate it.]';
     
     const previewContent = `
       <div style="margin-bottom: 15px;">
@@ -371,7 +345,7 @@ const Settings = () => {
       </div>
       <div>
         <h5>Generated Template:</h5>
-        <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px;">${generatedTemplate || '[Click "Generate Template" to create a template based on the meta prompt above]'}</pre>
+        <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px;">${generatedTemplate}</pre>
       </div>
     `;
     
@@ -726,46 +700,12 @@ Best regards,
               )}
 
               {settings.promptTemplate === 'custom' && (
-                <div className="form-group">
-                  <label className="form-label" htmlFor="custom-ai-prompt">Custom AI Prompt</label>
-                  <textarea 
-                    id="custom-ai-prompt" 
-                    className="form-textarea" 
-                    rows="15" 
-                    placeholder="Enter your custom AI prompt here..."
-                    value={settings.customAiPrompt}
-                    onChange={async (e) => {
-                      const newValue = e.target.value;
-                      setSettings({...settings, customAiPrompt: newValue});
-                      // Auto-save custom AI prompt
-                      await chrome.storage.local.set({ customAiPrompt: newValue });
-                    }}
-                  />
-                  <div className="form-help">
-                    <strong>Tips for custom prompts:</strong><br/>
-                    • Start with "I have 8+ years of experience"<br/>
-                    • Keep it under 8 lines<br/>
-                    • Include 2 steps and 2-3 KPIs<br/>
-                    • End with one clarifying question<br/>
-                    • Use industry-specific terminology
-                  </div>
-                  <div style={{marginTop: '10px'}}>
-                    <button className="btn btn-primary" onClick={saveCustomAiPrompt}>
-                      Save Custom AI Prompt
-                    </button>
-                  </div>
+                <div className="form-help">
+                  <strong>Note:</strong> For custom proposals, use the complete proposal prompt in the "Custom Instructions" tab.
                 </div>
               )}
 
               <div className="form-group">
-                <button 
-                  className="btn btn-primary" 
-                  onClick={generateTemplate}
-                  disabled={isGeneratingTemplate}
-                  style={{ marginRight: '10px' }}
-                >
-                  {isGeneratingTemplate ? 'Generating...' : 'Generate Template'}
-                </button>
                 <button className="btn btn-secondary" onClick={previewTemplate}>
                   Preview Template
                 </button>

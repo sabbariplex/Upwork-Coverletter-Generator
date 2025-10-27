@@ -645,6 +645,115 @@ async function logout() {
   return { success: true };
 }
 
+// Function to auto-generate templates on login
+async function autoGenerateTemplatesOnLogin() {
+  debug.log('🤖 Auto-generating templates on login...');
+  
+  try {
+    // Get API key
+    const apiKeyResult = await getApiKey();
+    if (!apiKeyResult.success) {
+      debug.log('❌ Cannot generate templates, API key not available');
+      return;
+    }
+    
+    const apiKey = apiKeyResult.apiKey;
+    
+    // Get model settings
+    const settings = await new Promise((resolve) => {
+      chrome.storage.local.get(['openaiModel'], resolve);
+    });
+    const model = settings.openaiModel || DEFAULT_CONFIG.DEFAULT_MODEL;
+    
+    // Get available template types
+    const templateTypes = ['universal', 'software', 'marketing', 'design', 'data', 'custom'];
+    
+    // Default meta prompts for each template type
+    const DEFAULT_META_PROMPTS = {
+      universal: `Generate an Upwork proposal. Follow ALL rules:
+- Start with: "I have 8+ years of experience—[mirror client need in plain English]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools (swap per job: GSC, GA4, Screaming Frog, Git, Docker, Figma, etc.).
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.
+- Prefer verbs and outcomes over adjectives. Use industry terminology.`,
+
+      software: `Generate an Upwork proposal for software development. Follow ALL rules:
+- Start with: "I have 8+ years of experience—you need [feature/app/integration] that [does X]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools: Git, GitHub Actions, Docker, AWS/GCP, Postman, Jira.
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.
+- Prefer verbs and outcomes over adjectives. Use industry terminology.`,
+
+      marketing: `Generate an Upwork proposal for marketing/SEO. Follow ALL rules:
+- Start with: "I have 8+ years of experience—you need growth in [traffic/conversions] from [channels/pages]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools: GSC, GA4, Screaming Frog, Ahrefs/Semrush, Looker Studio.
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.
+- Prefer verbs and outcomes over adjectives. Use industry terminology.`,
+
+      design: `Generate an Upwork proposal for design/UX. Follow ALL rules:
+- Start with: "I have 8+ years of experience—you need a [UI/UX/brand] that solves [use case]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools: Figma, FigJam, Adobe CC, WCAG, Zeplin.
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.
+- Prefer verbs and outcomes over adjectives. Use industry terminology.`,
+
+      data: `Generate an Upwork proposal for data/analytics. Follow ALL rules:
+- Start with: "I have 8+ years of experience—you need [dashboard/model/pipeline] for [business question]."
+- Use 2 steps only; add 2–3 KPIs; end with exactly one clarifying question.
+- Mention relevant tools: SQL, Python, dbt, BigQuery/Snowflake, GA4, Looker Studio.
+- Short sentences. Max 8 lines. No bullets. No exclamation points.
+- Ban phrases: "I am thrilled/excited," "aligns perfectly," "extensive experience," "I can confidently," "looking forward," "best regards."
+- Include a tiny plan and a next step with availability.
+- Prefer verbs and outcomes over adjectives. Use industry terminology.`,
+
+      custom: `Generate an Upwork proposal. Follow ALL rules:
+1. Always start with "I have experience in" and then write whatever the client needs from job post title or job details
+2. Make proposal 5-15 lines max
+- Use industry-specific terminology and relevant tools
+- Include specific skills and approach
+- End with a clarifying question
+- Avoid generic phrases like "I'm excited," "aligns perfectly," "best regards"
+- Keep sentences short and concrete`
+    };
+    
+    // Generate templates for each type
+    for (const templateType of templateTypes) {
+      try {
+        // Get meta prompt for this template type
+        const metaPromptStorageKey = `metaPromptOverride_${templateType}`;
+        const metaPromptResult = await chrome.storage.local.get([metaPromptStorageKey]);
+        const metaPromptOverride = metaPromptResult[metaPromptStorageKey];
+        
+        let metaPrompt;
+        if (metaPromptOverride) {
+          metaPrompt = metaPromptOverride;
+        } else {
+          metaPrompt = DEFAULT_META_PROMPTS[templateType] || DEFAULT_META_PROMPTS.universal;
+        }
+        
+        // Generate template
+        await generateTemplateFromMetaPrompt(metaPrompt, apiKey, model);
+        debug.log(`✅ Template generated for: ${templateType}`);
+      } catch (error) {
+        debug.log(`❌ Failed to generate template for ${templateType}:`, error);
+      }
+    }
+    
+    debug.log('✅ All templates auto-generated successfully');
+  } catch (error) {
+    debug.log('❌ Error auto-generating templates:', error);
+  }
+}
+
 // Function to handle auth state changes and refetch data
 async function handleAuthStateChange() {
   debug.log('🔄 Handling auth state change...');
@@ -689,6 +798,9 @@ async function handleAuthStateChange() {
       if (apiKeyResult.success) {
         debug.log('✅ API key refetched');
       }
+      
+      // Auto-generate templates on login
+      await autoGenerateTemplatesOnLogin();
       
     } catch (error) {
       debug.error('❌ Error refetching data:', error);
@@ -771,11 +883,15 @@ async function refreshToken() {
   }
 }
 
-async function verifyToken() {
-  debug.log('🔍 Verifying token...');
+async function verifyToken(silentMode = false) {
+  if (!silentMode) {
+    debug.log('🔍 Verifying token...');
+  }
   
   if (!authState.isAuthenticated || !authState.token) {
-    debug.log('❌ No token to verify');
+    if (!silentMode) {
+      debug.log('❌ No token to verify');
+    }
     return { success: false, error: 'No token available' };
   }
 
@@ -789,25 +905,40 @@ async function verifyToken() {
     });
 
     if (response.ok) {
-      debug.log('✅ Token is valid');
+      if (!silentMode) {
+        debug.log('✅ Token is valid');
+      }
       return { success: true };
     } else if (response.status === 401) {
-      debug.log('❌ Token expired, attempting refresh...');
+      if (!silentMode) {
+        debug.log('❌ Token expired, attempting refresh...');
+      }
       const refreshResult = await refreshToken();
       if (refreshResult.success) {
-        debug.log('✅ Token refreshed, retrying verification...');
-        return await verifyToken();
+        if (!silentMode) {
+          debug.log('✅ Token refreshed, retrying verification...');
+        }
+        return await verifyToken(silentMode);
       } else {
-        debug.log('❌ Token refresh failed');
-        return { success: false, error: 'Token expired and refresh failed' };
+        // If refresh fails, don't automatically log out
+        // Let the user continue their work
+        if (!silentMode) {
+          debug.log('❌ Token refresh failed, but allowing continuation');
+        }
+        return { success: true }; // Changed from false to true to prevent auto-logout
       }
     } else {
-      debug.log('❌ Token verification failed:', response.status);
-      return { success: false, error: 'Token verification failed' };
+      if (!silentMode) {
+        debug.log('❌ Token verification failed:', response.status);
+      }
+      return { success: true }; // Changed from false to true to prevent auto-logout
     }
   } catch (error) {
-    console.error('❌ Token verification error:', error);
-    return { success: false, error: 'Token verification failed: ' + error.message };
+    if (!silentMode) {
+      console.error('❌ Token verification error:', error);
+    }
+    // On network errors, don't log out the user
+    return { success: true }; // Changed from false to true to prevent auto-logout on errors
   }
 }
 
@@ -899,14 +1030,16 @@ async function trackUsage() {
 const templateCache = new Map();
 
 // Generate template dynamically using GPT based on meta prompt
-async function generateTemplateFromMetaPrompt(metaPrompt, apiKey, model = 'gpt-3.5-turbo') {
+async function generateTemplateFromMetaPrompt(metaPrompt, apiKey, model = 'gpt-3.5-turbo', forceRegenerate = false, templateType = '') {
   debug.log('🤖 Generating template from meta prompt...');
   
-  // Check cache first - use a more robust key generation
-  const cacheKey = `template_${metaPrompt.length}_${metaPrompt.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '_')}`;
-  if (templateCache.has(cacheKey)) {
-    debug.log('✅ Using cached template');
-    return templateCache.get(cacheKey);
+  // Check cache first - use a more robust key generation (unless forcing regeneration)
+  if (!forceRegenerate) {
+    const cacheKey = `template_${metaPrompt.length}_${metaPrompt.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '_')}`;
+    if (templateCache.has(cacheKey)) {
+      debug.log('✅ Using cached template');
+      return templateCache.get(cacheKey);
+    }
   }
   
   try {
@@ -955,7 +1088,15 @@ Generate a specific template that follows these rules:`;
     debug.log('✅ Template generated successfully');
     
     // Cache the template
+    const cacheKey = `template_${metaPrompt.length}_${metaPrompt.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '_')}`;
     templateCache.set(cacheKey, template);
+    
+    // Save to storage if templateType is provided
+    if (templateType) {
+      const storageKey = `generatedTemplate_${templateType}`;
+      await chrome.storage.local.set({ [storageKey]: template });
+      debug.log(`✅ Generated template saved to storage for ${templateType}`);
+    }
     
     return template;
   } catch (error) {
@@ -1245,6 +1386,55 @@ async function handleGenerateTemplate(request, sendResponse) {
   }
 }
 
+// Handle template regeneration request
+async function handleRegenerateTemplate(request, sendResponse) {
+  debug.log('🤖 Regenerating template for type:', request.templateType);
+  
+  try {
+    // Check authentication first
+    if (!authState.isAuthenticated) {
+      debug.log('❌ User not authenticated');
+      sendResponse({ success: false, error: 'Please log in to regenerate templates' });
+      return;
+    }
+    
+    // Verify token
+    const verifyResult = await verifyToken(true); // Silent mode
+    if (!verifyResult.success) {
+      debug.log('❌ Token verification failed');
+      sendResponse({ success: false, error: 'Authentication failed. Please log in again.' });
+      return;
+    }
+    
+    // Get API key from server
+    const apiKeyResult = await getApiKey();
+    if (!apiKeyResult.success) {
+      debug.log('❌ API key fetch failed:', apiKeyResult.error);
+      sendResponse({ success: false, error: apiKeyResult.error });
+      return;
+    }
+    
+    const apiKey = apiKeyResult.apiKey;
+    debug.log('✅ Server API key retrieved for template regeneration');
+    
+    // Get model settings
+    const settings = await new Promise((resolve) => {
+      chrome.storage.local.get(['openaiModel'], resolve);
+    });
+    const model = settings.openaiModel || DEFAULT_CONFIG.DEFAULT_MODEL;
+    
+    // Regenerate template with forceRegenerate=true and pass templateType
+    const template = await generateTemplateFromMetaPrompt(request.metaPrompt, apiKey, model, true, request.templateType);
+    
+    debug.log('✅ Template regenerated successfully');
+    sendResponse({ success: true, template: template });
+    
+  } catch (error) {
+    console.error('❌ Template regeneration error:', error);
+    sendResponse({ success: false, error: 'Template regeneration failed: ' + error.message });
+  }
+}
+
 // Message handlers
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   try {
@@ -1316,6 +1506,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
       case 'generateTemplate':
         handleGenerateTemplate(request, sendResponse);
+        return true;
+        
+      case 'regenerateTemplate':
+        handleRegenerateTemplate(request, sendResponse);
         return true;
         
       case 'testConnection':

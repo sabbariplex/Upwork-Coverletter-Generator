@@ -279,6 +279,11 @@ const Popup = () => {
               }, () => {
                 chrome.tabs.sendMessage(tab.id, { action: 'fillCoverLetter', coverLetter: bgResp.coverLetter });
                 
+                // Reload current job to refresh the UI
+                setTimeout(() => {
+                  loadCurrentJob();
+                }, 500);
+                
                 // Check if auto-answer questions is enabled and trigger it
                 chrome.storage.local.get(['autoAnswerQuestions'], (result) => {
                   if (result.autoAnswerQuestions === true) {
@@ -290,7 +295,6 @@ const Popup = () => {
                   }
                 });
               });
-              loadCurrentJob();
             } else {
               const errMsg = (bgResp && bgResp.error) || 'Failed to generate cover letter. Please try again.';
               showNotification(errMsg);
