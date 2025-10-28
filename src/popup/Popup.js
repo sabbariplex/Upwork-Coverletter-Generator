@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import debug from '../utils/debug.js';
 
 const Popup = () => {
@@ -40,12 +40,13 @@ const Popup = () => {
   });
   
   const [isGenerating, setIsGenerating] = useState(false);
-  const [notification, setNotification] = useState('');
+  const [notification, setNotification] = useState({ message: '', type: '' });
   const [debugMode, setDebugMode] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState({});
   const [pageReady, setPageReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const notificationTimeout = useRef(null);
 
   useEffect(() => {
     checkAuthState();
@@ -89,7 +90,7 @@ const Popup = () => {
             setUsage({ currentProposals: 0, maxProposals: 10, remaining: 10, percentage: 0 });
             setPageReady(false);
             setIsLoading(true);
-            setNotification('Please log in to use the extension.');
+            setNotification({ message: 'Please log in to use the extension.', type: 'info' });
             
             // Clear all internal state
             setAuthForm({ firstName: '', lastName: '', email: '', password: '' });
@@ -109,13 +110,22 @@ const Popup = () => {
   const handleAuth = async () => {
     // Validate form fields
     if (!authForm.email || !authForm.password) {
-      showNotification('Please fill in email and password');
+      showNotification('Please fill in email and password', 'error');
       return;
     }
     
     if (authMode === 'register' && (!authForm.firstName || !authForm.lastName)) {
-      showNotification('Please fill in all required fields');
+      showNotification('Please fill in all required fields', 'error');
       return;
+    }
+
+    // Extra smart validation for registration
+    if (authMode === 'register') {
+      const validationError = validateRegistration(authForm);
+      if (validationError) {
+        showNotification(validationError, 'error');
+        return;
+      }
     }
     
     if (authMode === 'login') {
@@ -124,6 +134,47 @@ const Popup = () => {
       await handleRegister();
     }
   };
+
+  // Validate registration fields with specific messages
+  function validateRegistration(form) {
+    const errors = [];
+
+    // Email
+    const email = (form.email || '').trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      errors.push('Please enter a valid email address.');
+    }
+
+    // First name
+    const firstName = (form.firstName || '').trim();
+    if (firstName.length < 2) {
+      errors.push('First name must be at least 2 letters.');
+    }
+    if (/\d/.test(firstName)) {
+      errors.push('First name cannot contain numbers.');
+    }
+
+    // Last name
+    const lastName = (form.lastName || '').trim();
+    if (lastName.length < 2) {
+      errors.push('Last name must be at least 2 letters.');
+    }
+    if (/\d/.test(lastName)) {
+      errors.push('Last name cannot contain numbers.');
+    }
+
+    // Password
+    const password = form.password || '';
+    if (password.length < 8) {
+      errors.push('Password must be at least 8 characters long.');
+    }
+    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      errors.push('Password must include at least one letter and one number.');
+    }
+
+    return errors.length ? errors.join(' ') : null;
+  }
 
   const handleLogin = async () => {
     chrome.runtime.sendMessage({
@@ -168,9 +219,11 @@ const Popup = () => {
         // Switch to login tab after successful registration
         setAuthMode('login');
         setAuthForm({ firstName: '', lastName: '', email: '', password: '' });
-        showNotification('Registration successful! Please log in to continue.');
+        showNotification('Registration successful! Please log in to continue.', 'success');
       } else {
-        showNotification(response?.error || 'Registration failed');
+        // Prefer specific server error if provided
+        const err = response?.error || response?.specificError || 'Registration failed';
+        showNotification(err, 'error');
       }
     });
   };
@@ -253,7 +306,7 @@ const Popup = () => {
 
   const generateCoverLetter = () => {
     if (!pageReady) {
-      setNotification('Page is not ready yet. Please wait...');
+      showNotification('Upwork page not ready. Open a job post and click Apply.');
       return;
     }
 
@@ -392,7 +445,6 @@ const Popup = () => {
             if (result.pageReady && result.currentJob) {
               setPageReady(true);
               setCurrentJob(result.currentJob);
-              setNotification('Page ready! You can now generate your cover letter.');
               setIsLoading(false);
             } else {
               // Page not marked as ready, actively check with content script
@@ -402,7 +454,6 @@ const Popup = () => {
                   // Content script not loaded or error
                   debug.log('Content script not available:', chrome.runtime.lastError.message);
                   setPageReady(false);
-                  setNotification('Please refresh the page and try again.');
                   setIsLoading(false);
                 } else if (response && response.success) {
                   // Page is ready and has job data
@@ -411,12 +462,10 @@ const Popup = () => {
                     title: response.jobTitle,
                     description: response.jobDescription
                   });
-                  setNotification('Page ready! You can now generate your cover letter.');
                   debug.log('Page is ready with job data:', response);
                 } else {
                   // Page is not ready or no job data
                   setPageReady(false);
-                  setNotification('Loading page... Please wait for the page to be ready.');
                   debug.log('Page not ready or no job data:', response);
                 }
                 setIsLoading(false);
@@ -425,7 +474,6 @@ const Popup = () => {
           });
         } else {
           setPageReady(false);
-          setNotification('Please navigate to an Upwork job application page.');
           setIsLoading(false);
         }
       }
@@ -440,9 +488,19 @@ const Popup = () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('subscription.html') });
   };
 
-  const showNotification = (message) => {
-    setNotification(message);
-    setTimeout(() => setNotification(''), 3000);
+  const showNotification = (message, type = 'info') => {
+    // Clear any existing timeout
+    if (notificationTimeout.current) {
+      clearTimeout(notificationTimeout.current);
+    }
+    
+    setNotification({ message, type });
+    
+    // Set new timeout
+    notificationTimeout.current = setTimeout(() => {
+      setNotification({ message: '', type: '' });
+      notificationTimeout.current = null;
+    }, 2000);
   };
 
   const loadDebugMode = async () => {
@@ -516,9 +574,9 @@ const Popup = () => {
   if (!authState.isAuthenticated) {
     return (
       <div className="container">
-        {notification && (
-          <div className="notification">
-            {notification}
+        {notification.message && (
+          <div className={`notification ${notification.type}`}>
+            {notification.message}
           </div>
         )}
         
@@ -606,9 +664,9 @@ const Popup = () => {
 
   return (
     <div className="container container-popup">
-      {notification && (
-        <div className="notification">
-          {notification}
+      {notification.message && (
+        <div className={`notification ${notification.type}`}>
+          {notification.message}
         </div>
       )}
       

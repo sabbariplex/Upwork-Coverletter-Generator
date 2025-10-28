@@ -44,6 +44,12 @@ let userUsage = {
   userId: null
 };
 
+// Helper: determine if user has unlimited usage
+function isUnlimitedUser() {
+  const subscriptionType = (authState.user && authState.user.subscriptionType) || '';
+  return subscriptionType === 'ENTERPRISE' || userUsage.subscriptionStatus === 'premium' || userUsage.subscriptionStatus === 'enterprise';
+}
+
 // Initialize authentication and usage on startup
 chrome.runtime.onStartup.addListener(async () => {
   await loadUserUsage();
@@ -356,6 +362,12 @@ async function incrementProposal() {
   if (!authState.isAuthenticated) {
     debug.log('❌ User not authenticated');
     return { success: false, error: 'User not authenticated' };
+  }
+
+  // Premium users: do not increment or call server, just succeed
+  if (isUnlimitedUser()) {
+    debug.log('👑 Premium user - skipping increment');
+    return { success: true, usage: userUsage };
   }
 
   try {
@@ -951,6 +963,12 @@ async function checkUsageLimits() {
     return false;
   }
 
+  // Premium users have unlimited usage
+  if (isUnlimitedUser()) {
+    debug.log('👑 Premium user - bypassing usage limits');
+    return true;
+  }
+
   try {
     const response = await fetch(`${DEFAULT_CONFIG.API_BASE_URL}/api/proposals/stats`, {
       method: 'GET',
@@ -969,7 +987,7 @@ async function checkUsageLimits() {
         await saveUserUsage();
         
         const limit = userUsage.max || DEFAULT_CONFIG.FREE_PROPOSAL_LIMIT;
-        const canGenerate = userUsage.current < limit || userUsage.subscriptionStatus === 'premium';
+        const canGenerate = userUsage.current < limit;
         debug.log(`📊 Usage check: ${userUsage.current}/${limit} proposals used, can generate: ${canGenerate}`);
         return canGenerate;
       }
@@ -1141,7 +1159,15 @@ function generateCustomPrompt(jobTitle, jobDescription, settings) {
 }
 
 function getDefaultPrompt() {
-  return AI_PROMPTS_TEMPLATES.universal.template;
+  // Fallback default for custom proposals (no AI required)
+  return `I have experience in [specific skills from job title/details].  
+[Brief approach or process - 2-3 lines]  
+[Specific outcomes or deliverables - 1-2 lines]  
+[Relevant tools and technologies - 1 line]  
+[One clarifying question about the project]
+
+Best regards,
+[Your Name]`;
 }
 
 // Apply signature to proposal
@@ -1618,7 +1644,7 @@ async function handleGenerateQuestionAnswers(request, sendResponse) {
   debug.log('❓ Generating question answers for:', request.questions?.length || 0, 'questions');
   
   // Check usage limits first
-  const canGenerate = await checkUsageLimits();
+  const canGenerate = isUnlimitedUser() ? true : await checkUsageLimits();
   if (!canGenerate) {
     debug.log('❌ Usage limit reached');
     sendResponse({ 
@@ -1691,7 +1717,7 @@ async function handleGenerateCoverLetter(request, sendResponse) {
   debug.log('📝 Generating cover letter for:', request.jobTitle);
   
   // Check usage limits first
-  const canGenerate = await checkUsageLimits();
+  const canGenerate = isUnlimitedUser() ? true : await checkUsageLimits();
   if (!canGenerate) {
     debug.log('❌ Usage limit reached');
     sendResponse({ 
