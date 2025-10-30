@@ -1176,6 +1176,14 @@ function applySignature(text, name) {
     const signatureName = name || 'Your Name';
     const nameGroup = signatureName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     let out = text || '';
+    // 1) Replace placeholder tokens with actual name
+    out = out.replace(/\[Your Name\]/g, signatureName);
+
+    // 2) Ensure common closings are followed by the name
+    // If the letter ends with a closing without a name, add it on next line
+    out = out.replace(/(^|\n)(Best regards|Regards|Sincerely),?\s*$/gim, (_m, prefix, closing) => `${prefix}${closing},\n${signatureName}`);
+
+    // 3) Normalize cases where Thanks/Thank you is followed by name on same line
     const rx = new RegExp(`\\b(Thanks|Thank you),\\s*${nameGroup}`, 'gi');
     out = out.replace(rx, (_m, thanks) => `${thanks},\n${signatureName}`);
     return out;
