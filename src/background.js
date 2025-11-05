@@ -1177,7 +1177,8 @@ function applySignature(text, name) {
     const nameGroup = signatureName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     let out = text || '';
     // 1) Replace placeholder tokens with actual name
-    out = out.replace(/\[Your Name\]/g, signatureName);
+    // Replace both [Your Name] and [Name] placeholders (case-sensitive) to cover variants
+    out = out.replace(/\[(?:Your Name|Name)\]/g, signatureName);
 
     // 2) Ensure common closings are followed by the name
     // If the letter ends with a closing without a name, add it on next line
@@ -1602,11 +1603,42 @@ async function handleLogout(request, sendResponse) {
 }
 
 async function handleGetAuthState(sendResponse) {
-  debug.log('🔍 Getting auth state');
-  sendResponse({ 
-    success: true, 
-    isAuthenticated: authState.isAuthenticated,
-    authState: authState 
+  debug.log('🔍 Getting auth state (storage-backed)');
+
+  // Read auth state from persistent storage to survive service worker restarts
+  chrome.storage.local.get(['authToken', 'refreshToken', 'user', 'userUsage'], (result) => {
+    try {
+      if (result && result.authToken && result.refreshToken) {
+        authState = {
+          isAuthenticated: true,
+          token: result.authToken,
+          refreshToken: result.refreshToken,
+          user: result.user || null
+        };
+      } else {
+        authState = {
+          isAuthenticated: false,
+          token: null,
+          refreshToken: null,
+          user: null
+        };
+      }
+
+      if (result && result.userUsage) {
+        // merge stored usage into runtime usage
+        userUsage = { ...userUsage, ...result.userUsage };
+      }
+
+      sendResponse({
+        success: true,
+        isAuthenticated: authState.isAuthenticated,
+        authState: authState,
+        usage: userUsage
+      });
+    } catch (err) {
+      debug.error('Error reading auth state from storage:', err);
+      sendResponse({ success: false, error: 'Failed to read auth state' });
+    }
   });
 }
 
