@@ -1315,6 +1315,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
     if (request && request.action === 'fillCoverLetter' && request.coverLetter) {
+      try {
+        // Save the cover letter under a job-specific key so it won't be reused on other jobs
+        const jobId = getCurrentJobId();
+        if (jobId) {
+          const storageKey = `coverLetter_${jobId}`;
+          const toStore = {};
+          toStore[storageKey] = request.coverLetter;
+          chrome.storage.local.set(toStore, () => {
+            debug.log('Saved cover letter to storage for job:', jobId);
+          });
+          // Also remove any generic coverLetter key to avoid cross-job reuse
+          chrome.storage.local.remove(['coverLetter']);
+        }
+      } catch (e) {
+        debug.error('Error saving job-specific cover letter:', e);
+      }
       fillCoverLetterField(request.coverLetter);
       sendResponse({ success: true });
       return true;
@@ -1566,6 +1582,112 @@ function signalPageReady() {
     });
   });
 }
+
+// Clear cover letter field when user navigates to a different job
+function clearCoverLetterField() {
+  try {
+    const coverLetterSelectors = [
+      'textarea[aria-labelledby="cover_letter_label"]',
+      'textarea.inner-textarea',
+      'textarea.air3-textarea',
+      'textarea[name="coverLetter"]',
+      'textarea[placeholder*="cover"]',
+      'textarea[placeholder*="letter"]',
+      'textarea[data-test="cover-letter"]',
+      'textarea[data-cy="cover-letter"]',
+      'textarea[aria-label*="cover"]',
+      'textarea[aria-label*="letter"]'
+    ];
+
+    let cleared = false;
+    for (const selector of coverLetterSelectors) {
+      const field = document.querySelector(selector);
+      if (field && (field.value || '').trim()) {
+        field.value = '';
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+        cleared = true;
+      }
+    }
+
+    // Fallback: clear large textareas
+    if (!cleared) {
+      const textareas = document.querySelectorAll('textarea');
+      for (const ta of textareas) {
+        if ((ta.value || '').trim() && ta.offsetHeight > 100) {
+          ta.value = '';
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ta.dispatchEvent(new Event('change', { bubbles: true }));
+          cleared = true;
+          break;
+        }
+      }
+    }
+
+    // Reset internal flags so a new proposal can be generated for the new job
+    window.__proposalGenerated = false;
+    window.__proposalGenerationInProgress = false;
+    window.__coverLetterFillPriority = 0;
+
+    if (cleared) debug.log('Cleared previous cover letter due to job/navigation change');
+  } catch (e) {
+    debug.error('Error clearing cover letter field:', e);
+  }
+}
+
+// Monitor SPA navigation and job id changes to clear stale proposals
+;(function setupJobChangeWatcher(){
+  try {
+    // Store current job id
+    window.__uclgCurrentJobId = getCurrentJobId();
+
+    // Override pushState and replaceState to detect navigation
+    const _pushState = history.pushState;
+    history.pushState = function () {
+      _pushState.apply(this, arguments);
+      setTimeout(() => {
+        const newId = getCurrentJobId();
+        if (newId !== window.__uclgCurrentJobId) {
+          window.__uclgCurrentJobId = newId;
+          clearCoverLetterField();
+        }
+      }, 100);
+    };
+    const _replaceState = history.replaceState;
+    history.replaceState = function () {
+      _replaceState.apply(this, arguments);
+      setTimeout(() => {
+        const newId = getCurrentJobId();
+        if (newId !== window.__uclgCurrentJobId) {
+          window.__uclgCurrentJobId = newId;
+          clearCoverLetterField();
+        }
+      }, 100);
+    };
+
+    // Listen to popstate as well
+    window.addEventListener('popstate', () => {
+      const newId = getCurrentJobId();
+      if (newId !== window.__uclgCurrentJobId) {
+        window.__uclgCurrentJobId = newId;
+        clearCoverLetterField();
+      }
+    });
+
+    // Periodic check as a fallback for dynamic DOM-only changes
+    setInterval(() => {
+      try {
+        const newId = getCurrentJobId();
+        if (newId !== window.__uclgCurrentJobId) {
+          window.__uclgCurrentJobId = newId;
+          clearCoverLetterField();
+        }
+      } catch (_) {}
+    }, 1500);
+  } catch (e) {
+    debug.error('Job change watcher failed to initialize:', e);
+  }
+})();
 
 // Function to manually generate and fill proposal based on job description
 async function generateManualProposal() {
@@ -1873,15 +1995,30 @@ function initialize() {
                                   document.querySelector('textarea.air3-textarea');
           
           if (coverLetterField && !window.__proposalGenerated && !window.__proposalGenerationInProgress) {
-            // Prefer filling from stored cover letter if available to avoid regenerating
-            chrome.storage.local.get(['coverLetter'], (res) => {
-              if (res && res.coverLetter) {
-                fillCoverLetterField(res.coverLetter, 1);
-                window.__proposalGenerated = true;
-              } else {
+            // Prefer filling from a job-specific stored cover letter if available to avoid regenerating
+            (async () => {
+              try {
+                const jobId = getCurrentJobId();
+                if (jobId) {
+                  chrome.storage.local.get([`coverLetter_${jobId}`], (res) => {
+                    const key = `coverLetter_${jobId}`;
+                    if (res && res[key]) {
+                      fillCoverLetterField(res[key], 1);
+                      window.__proposalGenerated = true;
+                      return;
+                    }
+                    // No job-specific stored cover letter - generate a new one
+                    generateAutoProposal();
+                  });
+                } else {
+                  // No reliable job id - generate a new proposal (avoid using generic stored coverLetter to prevent cross-job leakage)
+                  generateAutoProposal();
+                }
+              } catch (e) {
+                debug.error('Error checking stored cover letter:', e);
                 generateAutoProposal();
               }
-            });
+            })();
           }
         }
     }
